@@ -122,13 +122,11 @@ class MisprintDataset(data.Dataset):
             gt_name_processed,gt_name_mmb = self.process_name(gt_name,country)  
             
             return_tuple = [name,
-                            name_processed.long(),
-                            name_mmb.float(),
                             gt_name,
+                            name_processed.long(),
                             gt_name_processed.long(),
                             gt_name_mmb.float(),
-                            target,
-                            country]
+                            target]
             
         elif self.mode == 'test':
             # idx, not _idx
@@ -138,9 +136,7 @@ class MisprintDataset(data.Dataset):
             name_processed,name_mmb = self.process_name(name,country)
             
             return_tuple = [name,
-                            name_processed.long(),
-                            name_mmb.float(),
-                            country]            
+                            name_processed.long()]            
         
         return return_tuple
     

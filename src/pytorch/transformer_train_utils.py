@@ -19,7 +19,6 @@ def train(train_loader,
     lm_losses = AverageMeter()
     clf_losses = AverageMeter()
     acc1_meter = AverageMeter()
-    acc5_meter = AverageMeter()
     hdice_meter = AverageMeter()
     
     # switch to train mode
@@ -27,18 +26,27 @@ def train(train_loader,
 
     end = time.time()
     
-    for i,(input,msk,target,lens,sources) in enumerate(train_loader):        
+    for i,(names,gt_names,
+           input,gt,
+           msk,target) in enumerate(train_loader):        
         # measure data loading time
         data_time.update(time.time() - end)
 
+        # char sequences
         input = input.long().to(device)
+        gt = gt.long().to(device)
+        # clf target
         target = target.long().to(device)
+        # gt mask
         msk = msk.float().to(device)
         
         lm_logits, clf_logits = model(input)
-        clf_loss,lm_loss,hdice = compute_loss_fct(input, target, msk, clf_logits, lm_logits,
-                                            only_return_losses=False,
-                                            return_both_losses=True)            
+                
+        clf_loss,lm_loss,hdice = compute_loss_fct(input, target,
+                                                  msk,gt,
+                                                  clf_logits, lm_logits,
+                                                  only_return_losses=False,
+                                                  return_both_losses=True)            
 
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -52,9 +60,8 @@ def train(train_loader,
         # log the current lr
         current_lr = compute_loss_fct.opt.state_dict()['param_groups'][0]['lr']
 
-        prec1, prec5 = accuracy(clf_logits.detach(), target, topk=(1, 5))
+        prec1, prec2 = accuracy(clf_logits.detach(), target, topk=(1, 2))
         acc1_meter.update(prec1.item(), input.size(0))
-        acc5_meter.update(prec5.item(), input.size(0))
 
         # tensorboard logging
         if args.tensorboard:
@@ -71,16 +78,14 @@ def train(train_loader,
                   'Loss LM  {lm_losses.val:.6f} ({lm_losses.avg:.6f})\t'     
                   'Loss CLF {clf_losses.val:.6f} ({clf_losses.avg:.6f})\t' 
                   'ACC1     {acc1_meter.val:.4f} ({acc1_meter.avg:.4f})\t'
-                  'ACC5     {acc5_meter.val:.4f} ({acc5_meter.avg:.4f})\t'
                   'LM HDICE {hdice_meter.val:.4f} ({hdice_meter.avg:.4f})\t'.format(
                       epoch,i, len(train_loader),
                       batch_time=batch_time,data_time=data_time,
                       lm_losses=lm_losses,clf_losses=clf_losses,
-                      acc1_meter=acc1_meter,acc5_meter=acc5_meter,
-                      hdice_meter=hdice_meter))                
+                      acc1_meter=acc1_meter,hdice_meter=hdice_meter))                
 
     print(' * Avg Train ACC1 {acc1_meter.avg:.4f}'.format(acc1_meter=acc1_meter))
-    return acc1_meter.avg, acc5_meter.avg, lm_losses.avg, clf_losses.avg, hdice_meter.avg
+    return acc1_meter.avg, lm_losses.avg, clf_losses.avg, hdice_meter.avg
     
 def validate(val_loader,
              model,
@@ -97,7 +102,6 @@ def validate(val_loader,
     lm_losses = AverageMeter()
     clf_losses = AverageMeter()
     acc1_meter = AverageMeter()
-    acc5_meter = AverageMeter()
     hdice_meter = AverageMeter()
     
     # switch to evaluate mode
@@ -106,25 +110,30 @@ def validate(val_loader,
     end = time.time()
     
     with torch.no_grad():
-        for i,(input,msk,target,lens,sources) in enumerate(val_loader):
+        for i,(names,gt_names,
+               input,gt,
+               msk,target) in enumerate(train_loader):    
             
             input = input.long().to(device)
+            gt = gt.long().to(device)
+            
             target = target.long().to(device)
             msk = msk.float().to(device)
 
             lm_logits, clf_logits = model(input)
-            clf_loss,lm_loss, hdice = compute_loss_fct(input, target, msk, clf_logits, lm_logits,
-                                                only_return_losses=True,
-                                                return_both_losses=True)            
+            clf_loss,lm_loss, hdice = compute_loss_fct(input, target,
+                                                       msk,gt,
+                                                       clf_logits, lm_logits,
+                                                       only_return_losses=True,
+                                                       return_both_losses=True)            
 
             # measure accuracy and record loss
             lm_losses.update(lm_loss, input.size(0))
             clf_losses.update(clf_loss, input.size(0))
             hdice_meter.update(hdice, input.size(0))
 
-            prec1, prec5 = accuracy(clf_logits.detach(), target, topk=(1, 5))
+            prec1, prec2 = accuracy(clf_logits.detach(), target, topk=(1, 2))
             acc1_meter.update(prec1.item(), input.size(0))
-            acc5_meter.update(prec5.item(), input.size(0))           
             
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -138,16 +147,14 @@ def validate(val_loader,
                       'Loss LM  {lm_losses.val:.6f} ({lm_losses.avg:.6f})\t'     
                       'Loss CLF {clf_losses.val:.6f} ({clf_losses.avg:.6f})\t' 
                       'ACC1     {acc1_meter.val:.4f} ({acc1_meter.avg:.4f})\t'
-                      'ACC5     {acc5_meter.val:.4f} ({acc5_meter.avg:.4f})\t'
                       'LM HDICE {hdice_meter.val:.4f} ({hdice_meter.avg:.4f})\t'.format(
                        i, len(val_loader),
                        batch_time=batch_time, 
                        lm_losses=lm_losses,clf_losses=clf_losses,
-                       acc1_meter=acc1_meter,acc5_meter=acc5_meter,
-                       hdice_meter=hdice_meter)) 
+                       acc1_meter=acc1_meter,hdice_meter=hdice_meter)) 
 
     print(' * Avg Val ACC1 {acc1_meter.avg:.4f}'.format(acc1_meter=acc1_meter))
-    return acc1_meter.avg, acc5_meter.avg, lm_losses.avg, clf_losses.avg, hdice_meter.avg
+    return acc1_meter.avg, lm_losses.avg, clf_losses.avg, hdice_meter.avg
 
 def evaluate(val_loader,
              model,
@@ -302,3 +309,11 @@ def accuracy(output, target, topk=(1,)):
         correct_k = correct[:k].view(-1).float().sum(0)
         res.append(correct_k.mul_(100.0 / batch_size))
     return res        
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')   

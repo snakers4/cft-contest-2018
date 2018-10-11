@@ -13,11 +13,6 @@ import warnings
 import numpy as np
 import pandas as pd
 
-# fiddle with python path to import from parent folders
-module_path = os.path.abspath(os.path.join('../'))
-if module_path not in sys.path:
-    sys.path.append(module_path)
-
 # torch imports
 import torch
 import torch.nn as nn
@@ -27,17 +22,16 @@ import torch.nn.functional as F
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 # task specific custom modules
-from optimizer import OpenAIAdam
-from utils.text_utils.text_utils import pckl,upkl
-from transformer_train_utils import train,validate,evaluate
-from transformer_loss import MultipleChoiceLossCompute
-from utils.text_utils.transformer_dataset import TransformerDataset
-from transformer_model import (
+from pytorch.optimizer import OpenAIAdam
+from pytorch.transformer_train_utils import train,validate,evaluate
+from pytorch.transformer_loss import MultipleChoiceLossCompute
+from pytorch.transformer_dataset import MisprintDataset
+from pytorch.transformer_model import (
     DoubleHeadModel,
     DEFAULT_CONFIG,
     dotdict
     )
-from classifier.train_utils import str2bool
+from pytorch.transformer_train_utils import str2bool
 
 # utils
 from tensorboardX import SummaryWriter
@@ -47,20 +41,20 @@ parser = argparse.ArgumentParser()
 
 # transformer specific loss and optimization params
 # adam or openai_adam 
-parser.add_argument('--optimizer',   type=str,   default='openai_adam') 
-parser.add_argument('--lr',          type=float, default=6.25e-5)
+parser.add_argument('--optimizer',   type=str,      default='adam') 
+parser.add_argument('--lr',          type=float,    default=6.25e-5)
 parser.add_argument('--freeze_emb',  type=str2bool, default=False)
 # only for plain adam
-parser.add_argument('--emb_lr',      type=float, default=6.25e-6)
+parser.add_argument('--emb_lr',      type=float,    default=6.25e-6)
 
 # openai warmup schedules or plateau decay
 parser.add_argument('--lr_schedule', type=str,   default='warmup_linear') 
 
 # all the below flags are related to open-ai adam only
 # default values from openai adam
-parser.add_argument('--l2',            type=float, default=0.01)
-parser.add_argument('--max_grad_norm', type=int,   default=1)
-parser.add_argument('--lr_warmup',     type=float, default=0.002)
+parser.add_argument('--l2',            type=float,    default=0.01)
+parser.add_argument('--max_grad_norm', type=int,      default=1)
+parser.add_argument('--lr_warmup',     type=float,    default=0.002)
 parser.add_argument('--b1',            type=float,    default=0.9)
 parser.add_argument('--b2',            type=float,    default=0.999)
 parser.add_argument('--e',             type=float,    default=1e-8)
@@ -77,10 +71,10 @@ parser.add_argument('--vector_l2',     type=str2bool, default=False)
 # parser.add_argument('--n_embd', type=int, default=768)
 
 # embedding size
-parser.add_argument('--emb_size',    type=int,   default=300)
+parser.add_argument('--emb_size',    type=int,   default=50)
 # model capacity
-parser.add_argument('--n_head',      type=int,   default=12)
-parser.add_argument('--n_layer',     type=int,   default=12)
+parser.add_argument('--n_head',      type=int,   default=2)
+parser.add_argument('--n_layer',     type=int,   default=2)
 
 # regularization
 parser.add_argument('--embd_pdrop',  type=float, default=0.1)
@@ -90,36 +84,28 @@ parser.add_argument('--clf_pdrop',   type=float, default=0.1)
 parser.add_argument('--act_fn',      type=str,   default='gelu')
 
 # data loader params
-parser.add_argument('--dataset_path',  type=str,      default='data/all_corpuses_2018_09_06_processed_le.feather')
-parser.add_argument('--w2i_path',      type=str,      default='data/2018_09_07_encoding_w2i.pickle')
-parser.add_argument('--emb_path',      type=str,      default='data/2018_09_07_encoding_embedding.pth.tar')
-parser.add_argument('--seed',          type=int,      default=42)
-parser.add_argument('--train_sources', type=str,      default="['SEO_cluster','SEO_dash','Synonyms']")
-parser.add_argument('--test_sources',  type=str,      default="['order','select','tag']")
+parser.add_argument('--add_cn_embeddings',     type=str2bool, default=False)
+
 
 # main params
 
 parser.add_argument('--no_cuda',      action='store_true', default=False)
-# elbow in distribution after 5-6 words
-parser.add_argument('--max_len',      type=int,      default=7)
 parser.add_argument('--batch_size',   type=int,      default=480)
 parser.add_argument('--num_workers',  type=int,      default=4)
 parser.add_argument('--epochs',       type=int,      default=50)
 parser.add_argument('--fold',         type=int,      default=0)
-# how many classes for the classification head
-parser.add_argument('--target_column',  type=str,      default='s_id_encoded')
-parser.add_argument('--clf_classes',    type=int,      default=4579)
+parser.add_argument('--clf_classes',  type=int,      default=3)
 
 # logging
 parser.add_argument('--print_freq',  default=7,     type=int)
 parser.add_argument('--tensorboard', default=False, type=str2bool, help='Tensorboard logging (default False)')
 parser.add_argument('--tb_name',     default=None,  help='Name for tb logs')
 parser.add_argument('--csv_log',     default=None,  type=str, help='File for CSV logs, True or existing file, default None')
-parser.add_argument('--calc_hdice',  default=True, type=str2bool)
+parser.add_argument('--calc_hdice',  default=True,  type=str2bool)
 
 # evaluation
-parser.add_argument('--resume',              default='',        type=str)
-parser.add_argument('--evaluate',            dest='evaluate',   action='store_true')
+parser.add_argument('--resume',      default='',        type=str)
+parser.add_argument('--evaluate',    dest='evaluate',   action='store_true')
 
 # global vars
 best_acc1 = 0
@@ -147,35 +133,23 @@ transformer_config = dotdict({**DEFAULT_CONFIG, **{'n_embd':args.emb_size,
                                           }})
 
 base_dset_kwargs = {
-    'df_path':args.dataset_path,
-    'w2i_path':args.w2i_path,
     'mode':'train',
     'max_len':args.max_len,
     'fold':args.fold,
-    'keyword_column':'keyword',
-    'source_column':'source',
-    'trainval_sources':ast.literal_eval(args.train_sources),
-    'test_source':ast.literal_eval(args.test_sources),
     'random_state':args.seed,
-    'return_meta':True,
-    'target_column':args.target_column,
-}
+    'add_cn_embeddings':args.add_cn_embeddings,
 
-if args.evaluate:
-    base_dset_kwargs['return_string'] = True
-    
-    
+}
 
 def get_datasets(base_dset_kwargs):
     global args
-    """
+
     train_dataset = TransformerDataset(**{**base_dset_kwargs,
                                        **{'mode':'train'}})
     
     val_dataset   = TransformerDataset(**{**base_dset_kwargs,
                                        **{'mode':'val'}})
-    
-    """
+
     test_dataset  = TransformerDataset(**{**base_dset_kwargs,
                                        **{'mode':'test'}})    
     if args.no_cuda:
@@ -183,7 +157,7 @@ def get_datasets(base_dset_kwargs):
     else:
         pin_memory=True
      
-    """
+
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.batch_size,        
@@ -201,11 +175,6 @@ def get_datasets(base_dset_kwargs):
         num_workers=args.num_workers,
         pin_memory=pin_memory,
         drop_last=False)
-    """
-    train_dataset = None
-    val_dataset = None
-    train_loader = None
-    val_loader = None
     
     test_loader = torch.utils.data.DataLoader(
         test_dataset,
@@ -220,31 +189,15 @@ def get_datasets(base_dset_kwargs):
 
 def main():
     global base_dset_kwargs
-    global transformer_config, clf_token    
+    global transformer_config    
     global args, best_acc1, device, tb_name
     global train_minib_counter, valid_minib_counter, test_minib_counter
 
-    # TODO refactor here - support training from scratch
-    w2i = upkl(args.w2i_path)
-    embeds =  torch.load(args.emb_path)
-
-    # check that embeddings have i) correct length ii) size
-    # append the pre-processed embedding 
-    # check that the index is derived from the same embeddings
-    assert len(w2i)      == embeds.size(0)
-
-    # TODO refactor to have less mess
-    # add positional embeddings, add classify tag
-    embeddings_to_add = args.max_len + 1
-    embeds = torch.cat([embeds,torch.zeros(embeddings_to_add,args.emb_size)])
-    assert args.emb_size == embeds.size(1)    
-    
     label_writers = []
     
     if args.csv_log:
         columns = ['epoch','tb_name',
                    'train_acc1','val_acc1','test_acc1',
-                   'train_acc5','val_acc5','test_acc5',
                    'train_lm_hdice','val_lm_hdice','test_lm_hdice'
                   ]
         try:
@@ -255,24 +208,20 @@ def main():
     
         assert list(csv_log.columns) == columns
     
-    
     print('Saving logs to {}'.format(args.csv_log))
 
-    train_dataset,val_dataset,test_dataset,train_loader,val_loader,test_loader = get_datasets(base_dset_kwargs)
+    (train_dataset,val_dataset,test_dataset,
+     train_loader,val_loader,test_loader) = get_datasets(base_dset_kwargs)
     
-    # check that the dataset's w2i len is the same as the embeddings we load
-    # assert len(train_dataset.w2i) == embeds.size(0)
-    assert len(test_dataset.w2i) == embeds.size(0)
-    
-    # clf_token = train_dataset.clf_token
-    clf_token = test_dataset.clf_token
+    clf_token = train_dataset.clf_token
+    # clf_token = test_dataset.clf_token
     
     model = DoubleHeadModel(transformer_config,
                             clf_token,
                             'multiple_choice',
-                            vocab=embeds.size(0),
-                            n_ctx=args.max_len,
-                            embeddings=embeds,
+                            vocab=len(train_dataset.s2i),
+                            n_ctx=train_dataset.max_len,
+                            embeddings=None,
                             freeze_emb=args.freeze_emb)
 
     loaded_from_checkpoint = False
@@ -385,7 +334,7 @@ def main():
     else:
         print('Training starts...')        
         for epoch in range(args.epochs):
-            train_acc1, train_acc5, train_lm_loss, train_clf_loss, train_lm_hdice = train(train_loader,
+            train_acc1, train_lm_loss, train_clf_loss, train_lm_hdice = train(train_loader,
                                                                           model,
                                                                           compute_loss_fct,
                                                                           epoch,
@@ -394,7 +343,7 @@ def main():
                                                                           device,
                                                                           args)
 
-            val_acc1, val_acc5, val_lm_loss, val_clf_loss, val_lm_hdice = validate(val_loader,
+            val_acc1, val_lm_loss, val_clf_loss, val_lm_hdice = validate(val_loader,
                                                                      model,
                                                                      compute_loss_fct,
                                                                      epoch,
@@ -403,50 +352,27 @@ def main():
                                                                      device,
                                                                      args)
 
-            test_acc1, test_acc5, test_lm_loss, test_clf_loss, test_lm_hdice = validate(test_loader,
-                                                                         model,
-                                                                         compute_loss_fct,
-                                                                         epoch,
-                                                                         test_minib_counter,
-                                                                         writer,
-                                                                         device,
-                                                                         args)        
-
             # tensorboard logging
             if args.tensorboard:
                 writer.add_scalars('epoch/epoch_lm_losses', {'train_clf_loss': train_lm_loss,
-                                                             'val_clf_loss': val_lm_loss,
-                                                             'test_clf_loss': test_lm_loss},epoch+1) 
+                                                             'val_clf_loss': val_lm_loss},epoch+1) 
 
                 writer.add_scalars('epoch/epoch_clf_losses', {'train_clf_loss': train_clf_loss,
-                                                              'val_clf_loss': val_clf_loss,
-                                                              'test_clf_loss': test_clf_loss},epoch+1)            
+                                                              'val_clf_loss': val_clf_loss},epoch+1)            
 
                 writer.add_scalars('epoch/epoch_acc1', {'train_acc1': train_acc1,
-                                                        'val_acc1': val_acc1,
-                                                        'test_acc1': test_acc1},epoch+1)
-
-                writer.add_scalars('epoch/epoch_acc5', {'train_acc5': train_acc5,
-                                                        'val_acc5': val_acc5,
-                                                        'test_acc5': test_acc5},epoch+1) 
+                                                        'val_acc1': val_acc1},epoch+1)
 
                 writer.add_scalars('epoch/lm_hdice', {'train_lm_hdice': train_lm_hdice,
-                                                      'val_lm_hdice': val_lm_hdice,
-                                                      'test_lm_hdice': test_lm_hdice},epoch+1)            
+                                                      'val_lm_hdice': val_lm_hdice},epoch+1)            
 
             if args.csv_log:
                 csv_log.loc[str(args), 'epoch'] = epoch
                 csv_log.loc[str(args), 'tb_name'] = args.tb_name
                 csv_log.loc[str(args), 'train_acc1'] = train_acc1
-                csv_log.loc[str(args), 'train_acc5'] = train_acc5
                 csv_log.loc[str(args), 'val_acc1'] = val_acc1
-                csv_log.loc[str(args), 'val_acc5'] = val_acc5
-                csv_log.loc[str(args), 'test_acc1'] = test_acc1
-                csv_log.loc[str(args), 'test_acc5'] = test_acc5
-
                 csv_log.loc[str(args), 'train_lm_hdice'] = train_lm_hdice
                 csv_log.loc[str(args), 'val_lm_hdice'] = val_lm_hdice
-                csv_log.loc[str(args), 'test_lm_hdice'] = test_lm_hdice
 
             if args.optimizer.startswith('adam'):
                 scheduler.step(val_acc1)
@@ -475,4 +401,4 @@ def save_checkpoint(state, is_best, filename, best_filename):
         shutil.copyfile(filename, best_filename)
 
 if __name__ == '__main__':
-    main()
+    main()  
