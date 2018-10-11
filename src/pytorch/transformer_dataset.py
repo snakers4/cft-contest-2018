@@ -25,7 +25,8 @@ class MisprintDataset(data.Dataset):
                  
                  random_state=42,
                  return_meta=False,
-                 return_string=False):
+                 return_string=False,
+                 add_cn_embeddings=False):
         
         train_df = pd.read_csv(train_df_path)
         test_df = pd.read_csv(test_df_path)
@@ -35,6 +36,7 @@ class MisprintDataset(data.Dataset):
         self.fold = fold
         self.max_len = max_len
         self.random_state = random_state
+        self.add_cn_embeddings = add_cn_embeddings
 
         
         cns = train_df.country.value_counts()
@@ -81,7 +83,17 @@ class MisprintDataset(data.Dataset):
             if pos_emb not in self.s2i:
                 self.s2i[pos_emb] = len(self.s2i)
                 print('{} tag added to the dataset with index {}'.format(pos_emb,
-                                                                     len(self.s2i)-1))                   
+                                                                     len(self.s2i)-1))
+                
+        # add cn embeddings
+        if add_cn_embeddings:
+            for cn_key,i in self.cn_dict.items():
+                cn_emb = '_cn{}_'.format(i)
+                if cn_emb not in self.s2i:
+                    self.s2i[cn_emb] = len(self.s2i)
+                    print('{} tag added to the dataset with index {}'.format(cn_emb,
+                                                                         len(self.s2i)-1))                
+                
 
         skf = StratifiedKFold(n_splits = 4,
                               shuffle = True,
@@ -106,24 +118,24 @@ class MisprintDataset(data.Dataset):
                                            self.train_targets[_idx],
                                            self.train_countries[_idx])
             
-            name_processed,name_mmb = self.process_name(name)
-            gt_name_processed,gt_name_mmb = self.process_name(gt_name)  
+            name_processed,name_mmb = self.process_name(name,country)
+            gt_name_processed,gt_name_mmb = self.process_name(gt_name,country)  
             
             return_tuple = [name,
                             name_processed.long(),
                             name_mmb.float(),
                             gt_name,
-                            gt_name_processed,
-                            gt_name_mmb,
+                            gt_name_processed.long(),
+                            gt_name_mmb.float(),
                             target,
                             country]
             
         elif self.mode == 'test':
             # idx, not _idx
             name,country = (self.train_names[idx],
-                                           self.test_countries[idx])
+                            self.test_countries[idx])
             
-            name_processed,name_mmb = self.process_name(name)
+            name_processed,name_mmb = self.process_name(name,country)
             
             return_tuple = [name,
                             name_processed.long(),
@@ -132,7 +144,9 @@ class MisprintDataset(data.Dataset):
         
         return return_tuple
     
-    def process_name(self,name):
+    def process_name(self,
+                     name,
+                     country):
         # start with the _start_ token
         processed = [self.s2i['_start_']] * 1              
 
@@ -162,7 +176,18 @@ class MisprintDataset(data.Dataset):
         # also account for the classification token
         
         pmb = np.arange(self.vocab_len, self.vocab_len + self.max_len)
-        processed = torch.stack((processed,torch.from_numpy(pmb)),dim=1)
+        
+        if self.add_cn_embeddings:
+            # add country embeddings
+            # just repeat the country embedding
+            # having different country embedding for each position is questionable
+            
+            cmb = np.asarray([self.vocab_len + self.max_len + country] * self.max_len)
+            processed = torch.stack((processed,
+                                     torch.from_numpy(pmb),
+                                     torch.from_numpy(cmb)),dim=1)    
+        else:
+            processed = torch.stack((processed,torch.from_numpy(pmb)),dim=1)
         
         return processed,mmb
         

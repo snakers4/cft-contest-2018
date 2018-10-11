@@ -143,7 +143,7 @@ class TransformerModel(nn.Module):
     """ Transformer model """
     def __init__(self,
                  cfg,
-                 vocab=46902,
+                 vocab=167,
                  embeddings=None,
                  freeze_emb=False,
                  n_ctx=512):
@@ -193,7 +193,9 @@ class LMHead(nn.Module):
 
     def forward(self, h):
         # Truncated Language modeling logits (we remove the last token)
-        h_trunc = h[:, :-1].contiguous().view(-1, self.n_embd)
+        # for seq2seq we use non-truncated logits (!)
+        # h_trunc = h[:, :-1].contiguous().view(-1, self.n_embd)
+        h_trunc = h[:, :].contiguous().view(-1, self.n_embd)
         lm_logits = self.decoder(h_trunc)
         return lm_logits
 
@@ -276,7 +278,7 @@ class DoubleHeadModel(nn.Module):
     """ Transformer with language model and task specific heads """
     def __init__(self,
                  cfg, clf_token, task_head_type,
-                 vocab=40990, n_ctx=512,
+                 vocab=167, n_ctx=512,
                  embeddings=None,
                  freeze_emb=False,
                 ):

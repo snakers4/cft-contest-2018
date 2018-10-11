@@ -20,7 +20,8 @@ class MultipleChoiceLossCompute:
             self.hdice = HardDice(threshold=hdice_ths)
 
     def __call__(self,
-                 X, Y, M,
+                 X, Y, # input sequence, target classification, 
+                 M, X_gt, # the target (!) mask, the target sequence
                  clf_logits,
                  lm_logits=None,
                  only_return_losses=False,
@@ -33,8 +34,13 @@ class MultipleChoiceLossCompute:
         assert Y.size(0) == M.size(0)
         assert X.size(0) == M.size(0)
         
+        # X and X_gt
+        assert X.size() == X_gt.size()
+        
         # conform X tensor to BxSEQx(TOKEN+SEQUENCE)format
         assert len(X.size())==3
+        assert len(X_gt.size())==3
+        
         # X = X.view(-1, X.size(-2), X.size(-1))
         
         # Language modeling loss
@@ -45,11 +51,16 @@ class MultipleChoiceLossCompute:
             
             # use teacher forcing and skip the first token
             # BxSEQx2
-            x_shifted  = X[:, 1:, 0].contiguous().view(-1)
+            # x_shifted  = X[:, 1:, 0].contiguous().view(-1)
+            
+            # the difference between this and language modelling is that we have a set gt
+            # also our gt is not shifted
+            
+            x_shifted  = X_gt[:, :, 0].contiguous().view(-1)
             
             if self.calc_lm_hdice:
                 # BxSEQ-1
-                x_shifted_ = X[:, 1:, 0].contiguous()
+                x_shifted_ = X[:, :, 0].contiguous()
                 assert len(x_shifted_.size())==2                
                 # create a ohe version of x tensor
                 # BxSEQ-1 => BxSEQ-1xVOCAB => ALLxVOCAB
@@ -61,9 +72,17 @@ class MultipleChoiceLossCompute:
                 hdice = self.hdice(lm_logits,x_shifted_ohe)
             
             lm_losses = self.lm_criterion(lm_logits, x_shifted)
-            lm_losses = lm_losses.view(X.size(0), X.size(1) - 1)
-            lm_losses = lm_losses * M[:, 1:]
-            lm_losses = lm_losses.sum(1) / torch.sum(M[:, 1:], 1)
+            # lm_losses = lm_losses.view(X.size(0), X.size(1) - 1)
+            # lm_losses = lm_losses * M[:, 1:]
+            # lm_losses = lm_losses.sum(1) / torch.sum(M[:, 1:], 1)
+            
+            # the difference between this and language modelling is that we have a set gt
+            # also our gt is not shifted
+            
+            lm_losses = lm_losses.view(X.size(0), X.size(1))
+            # M is gt mask, in case the gt is longer
+            lm_losses = lm_losses * M[:,:]
+            lm_losses = lm_losses.sum(1) / torch.sum(M[:,:], 1)            
             
         # сlassification loss
         clf_losses = self.clf_criterion(clf_logits, Y)
