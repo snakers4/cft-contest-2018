@@ -30,7 +30,7 @@ class MisprintDataset(data.Dataset):
         
         train_df = pd.read_csv(train_df_path)
         test_df = pd.read_csv(test_df_path)
-        self.s2i = symbol_dict
+        self.s2i = symbol_dict.copy()
         
         self.mode = mode
         self.fold = fold
@@ -112,7 +112,7 @@ class MisprintDataset(data.Dataset):
         elif self.mode == 'val':
             _idx = self.val_idx[idx]
 
-        if self.mode in ('train','val'):
+        if self.mode in ['train','val']:
             name,gt_name,target,country = (self.train_names[_idx],
                                            self.train_gt_names[_idx],
                                            self.train_targets[_idx],
@@ -193,4 +193,4 @@ class MisprintDataset(data.Dataset):
         elif self.mode == 'val':
             return len(self.val_idx)
         elif self.mode == 'test':
-            return len(self.test_texts)  
+            return len(self.test_names)  

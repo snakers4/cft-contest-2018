@@ -112,7 +112,7 @@ def validate(val_loader,
     with torch.no_grad():
         for i,(names,gt_names,
                input,gt,
-               msk,target) in enumerate(train_loader):    
+               msk,target) in enumerate(val_loader):    
             
             input = input.long().to(device)
             gt = gt.long().to(device)
