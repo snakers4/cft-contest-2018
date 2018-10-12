@@ -20,6 +20,7 @@ def train(train_loader,
     clf_losses = AverageMeter()
     acc1_meter = AverageMeter()
     hdice_meter = AverageMeter()
+    lm_acc1_meter = AverageMeter()
     
     # switch to train mode
     model.train()
@@ -61,7 +62,13 @@ def train(train_loader,
         current_lr = compute_loss_fct.opt.state_dict()['param_groups'][0]['lr']
 
         prec1, prec2 = accuracy(clf_logits.detach(), target, topk=(1, 2))
+        # predictions are B*SEQxCLASSES
+        # have to conform to to B*SEQxCLASSES vs B*SEQ
+        lm_prec1, lm_prec2 = accuracy(lm_logits.detach(),
+                                      gt[:, :, 0].contiguous().view(-1,1), topk=(1, 2))
+        
         acc1_meter.update(prec1.item(), input.size(0))
+        lm_acc1_meter.update(lm_prec1.item(), input.size(0))
 
         # tensorboard logging
         if args.tensorboard:
@@ -78,14 +85,18 @@ def train(train_loader,
                   'Loss LM  {lm_losses.val:.6f} ({lm_losses.avg:.6f})\t'     
                   'Loss CLF {clf_losses.val:.6f} ({clf_losses.avg:.6f})\t' 
                   'ACC1     {acc1_meter.val:.4f} ({acc1_meter.avg:.4f})\t'
+                  'LM ACC1  {lm_acc1_meter.val:.4f} ({lm_acc1_meter.avg:.4f})\t'
                   'LM HDICE {hdice_meter.val:.4f} ({hdice_meter.avg:.4f})\t'.format(
                       epoch,i, len(train_loader),
                       batch_time=batch_time,data_time=data_time,
                       lm_losses=lm_losses,clf_losses=clf_losses,
-                      acc1_meter=acc1_meter,hdice_meter=hdice_meter))                
+                      acc1_meter=acc1_meter,lm_acc1_meter=lm_acc1_meter,
+                      hdice_meter=hdice_meter))                
 
     print(' * Avg Train ACC1 {acc1_meter.avg:.4f}'.format(acc1_meter=acc1_meter))
-    return acc1_meter.avg, lm_losses.avg, clf_losses.avg, hdice_meter.avg
+    print(' * Avg Train LM ACC1 {acc1_meter.avg:.4f}'.format(acc1_meter=acc1_meter))
+    
+    return acc1_meter.avg, lm_losses.avg, clf_losses.avg, hdice_meter.avg, lm_acc1_meter.avg
     
 def validate(val_loader,
              model,
@@ -103,6 +114,8 @@ def validate(val_loader,
     clf_losses = AverageMeter()
     acc1_meter = AverageMeter()
     hdice_meter = AverageMeter()
+    
+    lm_acc1_meter = AverageMeter()
     
     # switch to evaluate mode
     model.eval()
@@ -133,8 +146,14 @@ def validate(val_loader,
             hdice_meter.update(hdice, input.size(0))
 
             prec1, prec2 = accuracy(clf_logits.detach(), target, topk=(1, 2))
-            acc1_meter.update(prec1.item(), input.size(0))
+            # predictions are B*SEQxCLASSES
+            # have to conform to to B*SEQxCLASSES vs B*SEQ
+            lm_prec1, lm_prec2 = accuracy(lm_logits.detach(),
+                                          gt[:, :, 0].contiguous().view(-1,1), topk=(1, 2))                
             
+            acc1_meter.update(prec1.item(), input.size(0))
+            lm_acc1_meter.update(lm_prec1.item(), input.size(0))            
+
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
@@ -147,14 +166,16 @@ def validate(val_loader,
                       'Loss LM  {lm_losses.val:.6f} ({lm_losses.avg:.6f})\t'     
                       'Loss CLF {clf_losses.val:.6f} ({clf_losses.avg:.6f})\t' 
                       'ACC1     {acc1_meter.val:.4f} ({acc1_meter.avg:.4f})\t'
+                      'LM ACC1  {lm_acc1_meter.val:.4f} ({lm_acc1_meter.avg:.4f})\t'                      
                       'LM HDICE {hdice_meter.val:.4f} ({hdice_meter.avg:.4f})\t'.format(
                        i, len(val_loader),
                        batch_time=batch_time, 
                        lm_losses=lm_losses,clf_losses=clf_losses,
-                       acc1_meter=acc1_meter,hdice_meter=hdice_meter)) 
+                       acc1_meter=acc1_meter,lm_acc1_meter=lm_acc1_meter,
+                       hdice_meter=hdice_meter)) 
 
     print(' * Avg Val ACC1 {acc1_meter.avg:.4f}'.format(acc1_meter=acc1_meter))
-    return acc1_meter.avg, lm_losses.avg, clf_losses.avg, hdice_meter.avg
+    return acc1_meter.avg, lm_losses.avg, clf_losses.avg, hdice_meter.avg, lm_acc1_meter.avg
 
 def evaluate(val_loader,
              model,
