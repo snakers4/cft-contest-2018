@@ -91,7 +91,14 @@ def train(train_loader,
                       batch_time=batch_time,data_time=data_time,
                       lm_losses=lm_losses,clf_losses=clf_losses,
                       acc1_meter=acc1_meter,lm_acc1_meter=lm_acc1_meter,
-                      hdice_meter=hdice_meter))                
+                      hdice_meter=hdice_meter))
+            
+        # break out of cycle early if required
+        # must be used with Dataloader shuffle = True
+        if args.epoch_fraction < 1.0:
+            if i > len(train_loader) * min(args.epoch_fraction,0.2):
+                print('Proceed to next epoch on {}/{}'.format(i,len(train_loader)))
+                break            
 
     print(' * Avg Train ACC1 {acc1_meter.avg:.4f}'.format(acc1_meter=acc1_meter))
     print(' * Avg Train LM ACC1 {acc1_meter.avg:.4f}'.format(acc1_meter=acc1_meter))
@@ -172,7 +179,14 @@ def validate(val_loader,
                        batch_time=batch_time, 
                        lm_losses=lm_losses,clf_losses=clf_losses,
                        acc1_meter=acc1_meter,lm_acc1_meter=lm_acc1_meter,
-                       hdice_meter=hdice_meter)) 
+                       hdice_meter=hdice_meter))
+                
+            # break out of cycle early if required
+            # must be used with Dataloader shuffle = True
+            if args.epoch_fraction < 1.0:
+                if i > len(val_loader) * min(args.epoch_fraction,0.2):
+                    print('Proceed to next epoch on {}/{}'.format(i,len(val_loader)))
+                    break                     
 
     print(' * Avg Val ACC1 {acc1_meter.avg:.4f}'.format(acc1_meter=acc1_meter))
     return acc1_meter.avg, lm_losses.avg, clf_losses.avg, hdice_meter.avg, lm_acc1_meter.avg

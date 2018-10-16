@@ -171,7 +171,8 @@ class TransformerModel(nn.Module):
     def forward(self, x):
         # conform to BxSEQx(TOKEN+SEQUENCE) format
         assert len(x.size())==3
-        assert x.size(2)== 2
+        # or (TOKEN+SEQUENCE+COUNTRY)
+        assert x.size(2)>= 2
         # x = x.view(-1, x.size(-2), x.size(-1))
         
         e = self.embed(x)

@@ -9,7 +9,13 @@ class MultipleChoiceLossCompute:
     def __init__(self, lm_criterion, clf_criterion, lm_coef,
                  opt=None,
                  calc_lm_hdice=False,
-                 hdice_ths=0.25):
+                 hdice_ths=0.25,
+                 lm_loss_weight = 1.0,
+                 clf_loss_weight = 1.0):
+        
+        self.lm_loss_weight = lm_loss_weight
+        self.clf_loss_weight = clf_loss_weight
+        
         self.lm_criterion = lm_criterion
         self.clf_criterion = clf_criterion
         self.calc_lm_hdice = calc_lm_hdice
@@ -90,9 +96,9 @@ class MultipleChoiceLossCompute:
         
         # do not do backward pass
         if only_return_losses:
-            clf_loss = clf_losses.sum()
+            clf_loss = clf_losses.sum() * self.clf_loss_weight
             if lm_logits is not None:
-                lm_loss = lm_losses.sum()
+                lm_loss = lm_losses.sum() * self.lm_loss_weight
             else:
                 lm_loss = 0
             
@@ -100,7 +106,10 @@ class MultipleChoiceLossCompute:
             
             if return_both_losses:
                 if self.calc_lm_hdice:
-                    return clf_loss.item(),lm_loss.item(),hdice.item()
+                    if type(lm_loss)==int:
+                        return clf_loss.item(),0,hdice.item()
+                    else:
+                        return clf_loss.item(),lm_loss.item(),hdice.item()
                 else:
                     return clf_loss.item(),lm_loss.item()
             else:
@@ -108,8 +117,8 @@ class MultipleChoiceLossCompute:
 
         # do backward pass
         if self.lm_coef > 0 and lm_logits is not None:
-            clf_loss = clf_losses.sum()
-            lm_loss = lm_losses.sum()
+            clf_loss = clf_losses.sum() * self.clf_loss_weight
+            lm_loss = lm_losses.sum() * self.lm_loss_weight
             train_loss = clf_loss + self.lm_coef * lm_loss
         else:
             clf_loss = clf_losses.sum()
@@ -124,7 +133,10 @@ class MultipleChoiceLossCompute:
             
         if return_both_losses:
             if self.calc_lm_hdice:
-                return clf_loss.item(),lm_loss.item(),hdice.item()
+                if type(lm_loss)==int:
+                    return clf_loss.item(),0,0
+                else:
+                    return clf_loss.item(),lm_loss.item(),hdice.item()
             else:
                 return clf_loss.item(),lm_loss.item()
         else:
