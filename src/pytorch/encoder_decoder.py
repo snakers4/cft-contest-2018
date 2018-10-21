@@ -5,31 +5,108 @@ import torch.nn.functional as F
 import math, copy, time
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
+def make_model(src_vocab,
+               tgt_vocab,
+               device=None,
+               emb_size=256,
+               hidden_size=512,
+               num_layers=1,
+               dropout=0.1,
+               num_classes=3):
+    "Helper: Construct a model from hyperparameters."
+
+    attention = BahdanauAttention(hidden_size)
+    
+    # for char level models - do not use embeddings
+    # just use ohe vectors instead
+    """
+    if emb_size>1:
+        model = EncoderDecoder(
+            Encoder(emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
+            Decoder(emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout),
+            nn.Embedding(src_vocab, emb_size),
+            nn.Embedding(tgt_vocab, emb_size),
+            Generator(hidden_size, tgt_vocab))
+    else:
+        model = EncoderDecoder(
+            Encoder(emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
+            Decoder(emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout),
+            None,
+            None,
+            Generator(hidden_size, tgt_vocab))        
+    """
+    model = EncoderDecoder(
+        Encoder(emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
+        Decoder(emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout),
+        nn.Embedding(src_vocab, emb_size),
+        nn.Embedding(tgt_vocab, emb_size),
+        Generator(hidden_size, tgt_vocab),
+        Classifier(hidden_size, num_classes=num_classes, dropout=dropout)) 
+    return model.to(device)
+
 class EncoderDecoder(nn.Module):
     """
     A standard Encoder-Decoder architecture. Base for this and many 
     other models.
     """
-    def __init__(self, encoder, decoder, src_embed, trg_embed, generator):
+    def __init__(self, encoder, decoder, src_embed, trg_embed, generator, classifier):
         super(EncoderDecoder, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.src_embed = src_embed
         self.trg_embed = trg_embed
         self.generator = generator
+        self.classifier = classifier
         
-    def forward(self, src, trg, src_mask, trg_mask, src_lengths, trg_lengths):
+    def forward(self,
+                src, trg,
+                src_mask, trg_mask,
+                src_lengths, trg_lengths):
         """Take in and process masked src and target sequences."""
-        encoder_hidden, encoder_final = self.encode(src, src_mask, src_lengths)
-        return self.decode(encoder_hidden, encoder_final, src_mask, trg, trg_mask)
+        encoder_hidden, encoder_final = self.encode(src,
+                                                    src_mask,
+                                                    src_lengths)
+        
+        clf_logits = self.classifier(encoder_hidden)
+        
+        return self.decode(encoder_hidden,
+                           encoder_final,
+                           src_mask,
+                           trg,
+                           trg_mask),clf_logits
     
-    def encode(self, src, src_mask, src_lengths):
-        return self.encoder(self.src_embed(src), src_mask, src_lengths)
+    def encode(self,
+               src, src_mask, src_lengths):
+        if self.src_embed is not None:
+            return self.encoder(self.src_embed(src),
+                                src_mask,
+                                src_lengths)
+        else:
+            return self.encoder(src,
+                                src_mask,
+                                src_lengths)            
     
-    def decode(self, encoder_hidden, encoder_final, src_mask, trg, trg_mask,
+    def decode(self,
+               encoder_hidden,
+               encoder_final,
+               src_mask,
+               trg,
+               trg_mask,
                decoder_hidden=None):
-        return self.decoder(self.trg_embed(trg), encoder_hidden, encoder_final,
-                            src_mask, trg_mask, hidden=decoder_hidden)
+        if self.trg_embed is not None:        
+            return self.decoder(self.trg_embed(trg),
+                                encoder_hidden,
+                                encoder_final,
+                                src_mask,
+                                trg_mask,
+                                hidden=decoder_hidden)
+        else:
+            return self.decoder(trg,
+                                encoder_hidden,
+                                encoder_final,
+                                src_mask,
+                                trg_mask,
+                                hidden=decoder_hidden)            
    
 class Generator(nn.Module):
     """Define standard linear + softmax generation step."""
@@ -39,6 +116,26 @@ class Generator(nn.Module):
 
     def forward(self, x):
         return F.log_softmax(self.proj(x), dim=-1)
+
+class Classifier(nn.Module):
+    """Define standard linear classifer"""
+    def __init__(self,
+                 hidden_size,
+                 num_classes=3,
+                 dropout=0.2):    
+        super(Classifier, self).__init__()    
+        # standard classifier layer
+        self.classifier = nn.Sequential(nn.Linear(2 * hidden_size, 300),
+                                        nn.Dropout(p=dropout),
+                                        nn.LeakyReLU(),
+                                        nn.Linear(300, 128),
+                                        nn.Dropout(p=dropout),
+                                        nn.LeakyReLU(),
+                                        nn.Linear(128, num_classes))
+
+    def forward(self, x):
+        # return F.log_softmax(self.classifier(x).mean(dim=1),dim=-1)
+        return self.classifier(x).mean(dim=1)
     
 class Encoder(nn.Module):
     """Encodes a sequence of word embeddings"""
@@ -54,6 +151,10 @@ class Encoder(nn.Module):
         The input mini-batch x needs to be sorted by length.
         x should have dimensions [batch, time, dim].
         """
+        # add a dimension for a network with no embeddings
+        if len(x.size())==2:
+            x = x.unsqueeze(-1)
+            
         packed = pack_padded_sequence(x, lengths, batch_first=True)
         output, final = self.rnn(packed)
         output, _ = pad_packed_sequence(output, batch_first=True)
@@ -189,38 +290,3 @@ class Decoder(nn.Module):
             return None  # start with zeros
 
         return torch.tanh(self.bridge(encoder_final))
-    
-def make_model(src_vocab, tgt_vocab, emb_size=256, hidden_size=512, num_layers=1, dropout=0.1):
-    "Helper: Construct a model from hyperparameters."
-
-    attention = BahdanauAttention(hidden_size)
-
-    model = EncoderDecoder(
-        Encoder(emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
-        Decoder(emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout),
-        nn.Embedding(src_vocab, emb_size),
-        nn.Embedding(tgt_vocab, emb_size),
-        Generator(hidden_size, tgt_vocab))
-
-    return model.cuda() if USE_CUDA else model
-
-class SimpleLossCompute:
-    """A simple loss compute and train function."""
-
-    def __init__(self, generator, criterion, opt=None):
-        self.generator = generator
-        self.criterion = criterion
-        self.opt = opt
-
-    def __call__(self, x, y, norm):
-        x = self.generator(x)
-        loss = self.criterion(x.contiguous().view(-1, x.size(-1)),
-                              y.contiguous().view(-1))
-        loss = loss / norm
-
-        if self.opt is not None:
-            loss.backward()          
-            self.opt.step()
-            self.opt.zero_grad()
-
-        return loss.data.item() * norm
