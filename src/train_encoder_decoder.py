@@ -352,7 +352,7 @@ def train(model,
                 os.makedirs('weights/')
             save_checkpoint({
                     'epoch': epoch + 1,
-                    'state_dict': model.module.state_dict(),
+                    'state_dict': model.state_dict(),
                     'best_met': best_met,
                     },
                     is_best,
