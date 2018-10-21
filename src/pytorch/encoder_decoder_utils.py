@@ -64,6 +64,7 @@ class SimpleLossCompute:
                  clf_coeff = 1):
         self.generator = generator
         self.criterion = criterion
+        self.clf_criterion = clf_criterion
         self.opt = opt
         self.clf_coeff = clf_coeff
 
@@ -76,10 +77,8 @@ class SimpleLossCompute:
                                  y.contiguous().view(-1))
         lm_loss = lm_loss / norm
         
-        print(clf_logits.size(),clf_gts.size())
-        
         # normalize the clf loss by number of sentences
-        clf_loss = self.criterion(clf_logits, clf_gts)
+        clf_loss = self.clf_criterion(clf_logits, clf_gts)
         clf_loss = self.clf_coeff * clf_loss
         
         loss = lm_loss + clf_loss
@@ -161,7 +160,8 @@ def run_epoch(data_iter,
               model,
               loss_compute,
               print_every=50,
-              num_batches=100):
+              num_batches=100,
+              epoch_no=0):
     """Standard Training and Logging Function"""
 
     start = time.time()
@@ -171,9 +171,12 @@ def run_epoch(data_iter,
     print_tokens = 0
     total_sentences = 0
     
+    lm_losses = AverageMeter()
+    clf_losses = AverageMeter()    
+    
     with tqdm(total=num_batches) as pbar:
         for i, batch in enumerate(data_iter, 1):
-            
+            pbar.set_description('EPOCH %i' % epoch_no)
             batch_size = batch.src.size(0)
             
             (out, _, pre_output),clf_logits = model.forward(batch.src, batch.trg,
@@ -187,13 +190,23 @@ def run_epoch(data_iter,
             total_tokens += batch.ntokens
             print_tokens += batch.ntokens
             total_sentences += batch_size
+            
+            lm_losses.update(loss / batch.nseqs, batch_size)
+            clf_losses.update(clf_loss, batch_size)
 
             if model.training and i % print_every == 0:
                 elapsed = time.time() - start
+                
+                pbar.set_postfix(loss=(lm_losses.avg,lm_losses.val),
+                                 clf_loss=(clf_losses.avg,clf_losses.val),
+                                 tkns_per_sec=print_tokens / elapsed)
+                
+                """
                 print("Epoch Step: %d Loss: %f CLF Loss: %f Tokens per Sec: %f" %
                         (i,
                          loss / batch.nseqs, clf_loss,
                          print_tokens / elapsed))
+                """
                 start = time.time()
                 print_tokens = 0
             
@@ -248,3 +261,20 @@ def rebatch(pad_idx, batch):
     return Batch(batch.src, batch.trg,
                  batch.id,batch.clf,batch.cn,
                  pad_idx)
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
