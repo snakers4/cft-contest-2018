@@ -1,5 +1,4 @@
 # basic imports
-import tqdm
 import re
 import gc
 import ast
@@ -14,6 +13,7 @@ import argparse
 import warnings
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 # torch imports
 import torch
@@ -246,7 +246,8 @@ def main():
                                                             valid_iter_batch=valid_iter_batch,
                                                             val_ids=val_ids,
                                                             val_clf_gts=val_clf_gts,
-                                                            val_gts=val_gts)        
+                                                            val_gts=val_gts,
+                                                            writer=writer)        
 
 def train(model,
           num_epochs=10,
@@ -256,7 +257,8 @@ def train(model,
           valid_iter_batch=None,
           val_ids=None,
           val_clf_gts=None,
-          val_gts=None):
+          val_gts=None,
+          writer=None):
     
     global best_met
     global UNK_TOKEN,PAD_TOKEN,SOS_TOKEN,EOS_TOKEN,TRG_NAMES,LOWER,PAD_INDEX,NAMES,MIN_FREQ
