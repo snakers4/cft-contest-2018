@@ -1,6 +1,7 @@
 # basic imports
 import tqdm
 import re
+import gc
 import ast
 import copy
 import time
@@ -73,6 +74,7 @@ parser.add_argument('--tb_name',     default=None,  help='Name for tb logs')
 # evaluation
 parser.add_argument('--resume',      default='',        type=str)
 parser.add_argument('--evaluate',    dest='evaluate',   action='store_true')
+parser.add_argument('--predict',     dest='predict',   action='store_true')
 
 # global vars
 best_met = 0
@@ -96,7 +98,7 @@ tb_name = args.tb_name
 
 def main():
     global USE_CUDA,DEVICE
-    global UNK_TOKEN,PAD_TOKEN,SOS_TOKEN,EOS_TOKEN,TRG_NAMES,LOWER
+    global UNK_TOKEN,PAD_TOKEN,SOS_TOKEN,EOS_TOKEN,TRG_NAMES,LOWER,PAD_INDEX,NAMES,MIN_FREQ
     global args,best_met,valid_minib_counter
 
     label_writers = []
@@ -159,7 +161,7 @@ def main():
     PAD_INDEX = TRG_NAMES.vocab.stoi[PAD_TOKEN]
 
     train_iter = data.BucketIterator(train_data,
-                                     batch_size=batch_size,
+                                     batch_size=args.batch_size,
                                      train=True, 
                                      sort_within_batch=True, 
                                      sort_key=lambda x: (len(x.src), len(x.trg)),
@@ -168,7 +170,7 @@ def main():
                                      shuffle=True)
 
     valid_iter_batch = data.Iterator(valid_data,
-                               batch_size=batch_size,
+                               batch_size=args.batch_size,
                                train=False,
                                sort_within_batch=True,
                                sort_key=lambda x: (len(x.src), len(x.trg)),
@@ -225,7 +227,7 @@ def main():
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))    
     
-    criterion = nn.CrossEntropyLoss(reduce=False).to(device)
+    criterion = nn.CrossEntropyLoss(reduce=False).to(DEVICE)
 
     if args.tensorboard:
         writer = SummaryWriter('runs_encdec/{}'.format(tb_name))
@@ -237,7 +239,7 @@ def main():
     else:
         print('Training starts...') 
         dev_perplexity,dev_clf_loss,preds,clf_preds = train(model,
-                                                            lr=1*1e-3,
+                                                            lr=args.lr,
                                                             num_epochs=args.epochs,
                                                             print_every=args.print_freq,
                                                             train_iter=train_iter,
@@ -248,16 +250,16 @@ def main():
 
 def train(model,
           num_epochs=10,
-          lr=3*1e-4,
-          print_every=100,
-          train_iter=train_iter,
-          valid_iter_batch=valid_iter_batch,
+          lr=1e-3,
+          print_every=10,
+          train_iter=None,
+          valid_iter_batch=None,
           val_ids=None,
           val_clf_gts=None,
           val_gts=None):
     
     global best_met
-    global UNK_TOKEN,PAD_TOKEN,SOS_TOKEN,EOS_TOKEN,TRG_NAMES,LOWER
+    global UNK_TOKEN,PAD_TOKEN,SOS_TOKEN,EOS_TOKEN,TRG_NAMES,LOWER,PAD_INDEX,NAMES,MIN_FREQ
         
     # optionally add label smoothing; see the Annotated Transformer
     # criterion = nn.NLLLoss(reduce=, ignore_index=PAD_INDEX)
@@ -280,7 +282,6 @@ def train(model,
         print("Epoch", epoch)
         print('Training the model')
         model.train()
-        
         
         train_perplexity, train_clf_loss = run_epoch((rebatch(PAD_INDEX, b) for b in train_iter), 
                                                      model,
