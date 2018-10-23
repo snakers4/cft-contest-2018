@@ -12,36 +12,31 @@ def make_model(src_vocab,
                hidden_size=512,
                num_layers=1,
                dropout=0.1,
-               num_classes=3):
+               num_classes=3,
+               num_cn=0,
+               cn_emb_size=0):
     "Helper: Construct a model from hyperparameters."
 
     attention = BahdanauAttention(hidden_size)
     
-    # for char level models - do not use embeddings
-    # just use ohe vectors instead
-    """
-    if emb_size>1:
+    if (num_cn+cn_emb_size) == 0:
         model = EncoderDecoder(
             Encoder(emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
             Decoder(emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout),
             nn.Embedding(src_vocab, emb_size),
             nn.Embedding(tgt_vocab, emb_size),
-            Generator(hidden_size, tgt_vocab))
+            Generator(hidden_size, tgt_vocab),
+            Classifier(hidden_size, num_classes=num_classes, dropout=dropout))
     else:
-        model = EncoderDecoder(
-            Encoder(emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
-            Decoder(emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout),
-            None,
-            None,
-            Generator(hidden_size, tgt_vocab))        
-    """
-    model = EncoderDecoder(
-        Encoder(emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
-        Decoder(emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout),
-        nn.Embedding(src_vocab, emb_size),
-        nn.Embedding(tgt_vocab, emb_size),
-        Generator(hidden_size, tgt_vocab),
-        Classifier(hidden_size, num_classes=num_classes, dropout=dropout)) 
+        model = ConditionalEncoderDecoder(
+            Encoder(emb_size+cn_emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
+            Decoder(emb_size+cn_emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout),
+            nn.Embedding(src_vocab, emb_size),
+            nn.Embedding(tgt_vocab, emb_size),
+            Generator(hidden_size, tgt_vocab),
+            Classifier(hidden_size, num_classes=num_classes, dropout=dropout),
+            nn.Embedding(num_cn, cn_emb_size), # share the country embeddings between encoder and decoder
+        )
     return model.to(device)
 
 class EncoderDecoder(nn.Module):
@@ -107,7 +102,71 @@ class EncoderDecoder(nn.Module):
                                 src_mask,
                                 trg_mask,
                                 hidden=decoder_hidden)            
-   
+
+class ConditionalEncoderDecoder(nn.Module):
+    """
+    A standard Encoder-Decoder architecture. Base for this and many 
+    other models.
+    """
+    def __init__(self, encoder, decoder, src_embed, trg_embed, generator, classifier, cn_embed):
+        super(EncoderDecoder, self).__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.src_embed = src_embed
+        self.trg_embed = trg_embed
+        self.generator = generator
+        self.classifier = classifier
+        self.cn_embed = cn_embed
+        
+    def forward(self,
+                src, trg,
+                src_mask, trg_mask,
+                src_lengths, trg_lengths,
+                cn):
+        """Take in and process masked src and target sequences."""
+        encoder_hidden, encoder_final = self.encode(src,
+                                                    src_mask,
+                                                    src_lengths,
+                                                    cn)
+        
+        clf_logits = self.classifier(encoder_hidden)
+        
+        return self.decode(encoder_hidden,
+                           encoder_final,
+                           src_mask,
+                           trg,
+                           trg_mask,
+                           cn),clf_logits
+    
+    def encode(self,
+               src, src_mask, src_lengths, cn):
+        
+        embedded = self.src_embed(src) # concatenate country embeddings with token embeddings
+        cn_embedded = self.cn_embed(cn)
+        
+        return self.encoder(torch.cat((embedded,cn_embedded),dim=-1),
+                            src_mask,
+                            src_lengths)
+    
+    def decode(self,
+               encoder_hidden,
+               encoder_final,
+               src_mask,
+               trg,
+               trg_mask,
+               decoder_hidden=None,
+               cn=None):
+        
+        embedded = self.trg_embed(trg) # concatenate country embeddings with token embeddings
+        cn_embedded = self.cn_embed(cn)       
+        
+        return self.decoder(torch.cat((embedded,cn_embedded),dim=-1),
+                            encoder_hidden,
+                            encoder_final,
+                            src_mask,
+                            trg_mask,
+                            hidden=decoder_hidden)        
+        
 class Generator(nn.Module):
     """Define standard linear + softmax generation step."""
     def __init__(self, hidden_size, vocab_size):
@@ -151,10 +210,6 @@ class Encoder(nn.Module):
         The input mini-batch x needs to be sorted by length.
         x should have dimensions [batch, time, dim].
         """
-        # add a dimension for a network with no embeddings
-        if len(x.size())==2:
-            x = x.unsqueeze(-1)
-            
         packed = pack_padded_sequence(x, lengths, batch_first=True)
         output, final = self.rnn(packed)
         output, _ = pad_packed_sequence(output, batch_first=True)

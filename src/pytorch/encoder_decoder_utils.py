@@ -104,14 +104,18 @@ def tokenize(text):
 def greedy_decode_batch(model,
                         src, src_mask, src_lengths,
                         max_len=100,
-                        sos_index=1, eos_index=None):
+                        sos_index=1, eos_index=None,
+                        return_logits=False):
     """Greedily decode a sentence."""
     batch_size = src.size(0)
     
     with torch.no_grad():
         encoder_hidden, encoder_final = model.encode(src, src_mask, src_lengths)
         clf_logits = model.classifier(encoder_hidden)
-        _, pred_classes = torch.max(clf_logits, dim=1)
+        if return_logits:
+            pred_classes = clf_logits
+        else:
+            _, pred_classes = torch.max(clf_logits, dim=1)
         pred_classes = pred_classes.data.cpu().numpy()
         prev_y = torch.ones(batch_size, 1).fill_(sos_index).type_as(src)
         trg_mask = torch.ones_like(prev_y)
