@@ -56,7 +56,8 @@ class EncoderDecoder(nn.Module):
     def forward(self,
                 src, trg,
                 src_mask, trg_mask,
-                src_lengths, trg_lengths):
+                src_lengths, trg_lengths,
+                cn):
         """Take in and process masked src and target sequences."""
         encoder_hidden, encoder_final = self.encode(src,
                                                     src_mask,
@@ -68,18 +69,15 @@ class EncoderDecoder(nn.Module):
                            encoder_final,
                            src_mask,
                            trg,
-                           trg_mask),clf_logits
+                           trg_mask,
+                           cn),clf_logits
     
     def encode(self,
-               src, src_mask, src_lengths):
-        if self.src_embed is not None:
-            return self.encoder(self.src_embed(src),
-                                src_mask,
-                                src_lengths)
-        else:
-            return self.encoder(src,
-                                src_mask,
-                                src_lengths)            
+               src, src_mask, src_lengths,
+               cn):
+        return self.encoder(self.src_embed(src),
+                            src_mask,
+                            src_lengths)
     
     def decode(self,
                encoder_hidden,
@@ -87,21 +85,15 @@ class EncoderDecoder(nn.Module):
                src_mask,
                trg,
                trg_mask,
-               decoder_hidden=None):
-        if self.trg_embed is not None:        
-            return self.decoder(self.trg_embed(trg),
-                                encoder_hidden,
-                                encoder_final,
-                                src_mask,
-                                trg_mask,
-                                hidden=decoder_hidden)
-        else:
-            return self.decoder(trg,
-                                encoder_hidden,
-                                encoder_final,
-                                src_mask,
-                                trg_mask,
-                                hidden=decoder_hidden)            
+               decoder_hidden=None,
+               cn=None):
+        return self.decoder(self.trg_embed(trg),
+                            encoder_hidden,
+                            encoder_final,
+                            src_mask,
+                            trg_mask,
+                            hidden=decoder_hidden,
+                            )
 
 class ConditionalEncoderDecoder(nn.Module):
     """
@@ -139,7 +131,8 @@ class ConditionalEncoderDecoder(nn.Module):
                            cn),clf_logits
     
     def encode(self,
-               src, src_mask, src_lengths, cn):
+               src, src_mask, src_lengths,
+               cn):
         
         embedded = self.src_embed(src) # concatenate country embeddings with token embeddings
         cn_embedded = self.cn_embed(cn)
@@ -165,7 +158,7 @@ class ConditionalEncoderDecoder(nn.Module):
                             encoder_final,
                             src_mask,
                             trg_mask,
-                            hidden=decoder_hidden)        
+                            hidden=decoder_hidden)
         
 class Generator(nn.Module):
     """Define standard linear + softmax generation step."""

@@ -51,9 +51,10 @@ parser.add_argument('--num_classes',    type=int,   default=3)
 parser.add_argument('--emb_size',       type=int,   default=50)
 parser.add_argument('--hidden_size',    type=int,   default=256)
 parser.add_argument('--dropout',        type=float, default=0.2)
+parser.add_argument('--cn_emb_size',    type=int,   default=0)
+parser.add_argument('--num_cn',         type=int,   default=0)
 
 # dataset
-parser.add_argument('--add_cn_embeddings',  type=str2bool, default=False)
 parser.add_argument('--split_ratio',        type=float,    default=0.9)
 parser.add_argument('--stratified',         type=str2bool, default=True)
 parser.add_argument('--strata_field',       type=str,      default='cn') 
@@ -228,7 +229,9 @@ def main():
                        hidden_size=args.hidden_size,
                        num_layers=args.num_layers,
                        dropout=args.dropout,
-                       num_classes=args.num_classes)
+                       num_classes=args.num_classes,
+                       num_cn=num_cn,
+                       cn_emb_size=cn_emb_size)
     
     loaded_from_checkpoint = False
 
@@ -259,7 +262,7 @@ def main():
             
         preds,clf_preds = predict((rebatch(PAD_INDEX, x) for x in test_iter_batch),
                                   model, max_len=70, src_vocab=NAMES.vocab, trg_vocab=TRG_NAMES.vocab,
-                                  num_batches=len(test_iter_batch))
+                                  num_batches=len(test_iter_batch),return_logits=True)
         
         predict_df = pd.DataFrame(
             {'id': test_ids,
@@ -400,7 +403,8 @@ def predict(example_iter, model, max_len=100,
             src_eos_index=None, 
             trg_eos_index=None, 
             src_vocab=None, trg_vocab=None,
-            num_batches=100):
+            num_batches=100,
+            return_logits=False):
 
     global UNK_TOKEN,PAD_TOKEN,SOS_TOKEN,EOS_TOKEN,TRG_NAMES,LOWER
     model.eval()
@@ -424,7 +428,9 @@ def predict(example_iter, model, max_len=100,
 
             output, pred_classes = greedy_decode_batch(
                 model, batch.src, batch.src_mask, batch.src_lengths,
-                max_len=max_len, sos_index=trg_sos_index, eos_index=trg_eos_index)
+                max_len=max_len, sos_index=trg_sos_index, eos_index=trg_eos_index,
+                return_logits=return_logits,cn=batch.cn
+            )
 
             clf_preds.extend(list(pred_classes))
             

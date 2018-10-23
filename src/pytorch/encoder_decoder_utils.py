@@ -105,12 +105,13 @@ def greedy_decode_batch(model,
                         src, src_mask, src_lengths,
                         max_len=100,
                         sos_index=1, eos_index=None,
-                        return_logits=False):
+                        return_logits=False,
+                        cn=None):
     """Greedily decode a sentence."""
     batch_size = src.size(0)
     
     with torch.no_grad():
-        encoder_hidden, encoder_final = model.encode(src, src_mask, src_lengths)
+        encoder_hidden, encoder_final = model.encode(src, src_mask, src_lengths, cn)
         clf_logits = model.classifier(encoder_hidden)
         if return_logits:
             pred_classes = clf_logits
@@ -128,7 +129,8 @@ def greedy_decode_batch(model,
         with torch.no_grad():
             out, hidden, pre_output = model.decode(
               encoder_hidden, encoder_final, src_mask,
-              prev_y, trg_mask, hidden)
+              prev_y, trg_mask, hidden,
+              cn=cn)
 
             # we predict from the pre-output layer, which is
             # a combination of Decoder state, prev emb, and context
@@ -185,7 +187,8 @@ def run_epoch(data_iter,
             
             (out, _, pre_output),clf_logits = model.forward(batch.src, batch.trg,
                                                             batch.src_mask, batch.trg_mask,
-                                                            batch.src_lengths, batch.trg_lengths)
+                                                            batch.src_lengths, batch.trg_lengths,
+                                                            batch.cn)
             loss, clf_loss = loss_compute(pre_output, batch.trg_y, batch.nseqs,
                                           clf_logits,batch.clf)
             
