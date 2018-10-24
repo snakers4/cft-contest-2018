@@ -77,6 +77,7 @@ class SimpleLossCompute:
         # normalize the lm loss by number of tokens
         if self.seq_penalize_only_errors:
             # TODO add code here
+            pass
         else:
             lm_loss = self.criterion(x.contiguous().view(-1, x.size(-1)),
                                      y.contiguous().view(-1))        

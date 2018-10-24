@@ -61,7 +61,8 @@ class EncoderDecoder(nn.Module):
         """Take in and process masked src and target sequences."""
         encoder_hidden, encoder_final = self.encode(src,
                                                     src_mask,
-                                                    src_lengths)
+                                                    src_lengths,
+                                                    cn)
         
         clf_logits = self.classifier(encoder_hidden)
         
@@ -70,7 +71,7 @@ class EncoderDecoder(nn.Module):
                            src_mask,
                            trg,
                            trg_mask,
-                           cn),clf_logits
+                           cn=cn),clf_logits
     
     def encode(self,
                src, src_mask, src_lengths,
