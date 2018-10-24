@@ -67,6 +67,9 @@ parser.add_argument('--min_freq',           type=int,      default=1)
 parser.add_argument('--lr',           type=float,    default=1e-3)
 parser.add_argument('--epochs',       type=int,      default=50)
 parser.add_argument('--seed',         type=int,      default=42)
+parser.add_argument('--clf_coeff',    type=float,    default=1.0)
+
+parser.add_argument('--seq_penalize_only_errors', type=str2bool, default=False)
 
 # logging
 parser.add_argument('--print_freq',  default=10,     type=int)
@@ -301,7 +304,8 @@ def train(model,
         
     # optionally add label smoothing; see the Annotated Transformer
     # criterion = nn.NLLLoss(reduce=, ignore_index=PAD_INDEX)
-    criterion = nn.NLLLoss(size_average=False, ignore_index=0)
+ 
+    criterion = nn.NLLLoss(size_average=False, ignore_index=PAD_INDEX)
     clf_criterion = nn.CrossEntropyLoss()
     
     optim = torch.optim.Adam(model.parameters(), lr=lr)
@@ -325,7 +329,9 @@ def train(model,
                                                      model,
                                                      SimpleLossCompute(model.generator,
                                                                        criterion,clf_criterion,
-                                                                       optim),
+                                                                       optim,
+                                                                       seq_penalize_only_errors=args.seq_penalize_only_errors,
+                                                                       clf_coeff=args.clf_coeff),
                                                      print_every=print_every,
                                                      num_batches=len(train_iter),
                                                      epoch_no=epoch)

@@ -61,21 +61,26 @@ class SimpleLossCompute:
     def __init__(self, generator,
                  criterion,clf_criterion,
                  opt=None,
-                 clf_coeff = 1):
+                 clf_coeff = 1,
+                 seq_penalize_only_errors=False):
         self.generator = generator
         self.criterion = criterion
         self.clf_criterion = clf_criterion
         self.opt = opt
         self.clf_coeff = clf_coeff
+        self.seq_penalize_only_errors = seq_penalize_only_errors
 
     def __call__(self, x, y, norm,
                  clf_logits, clf_gts):
         x = self.generator(x)
-        
+
         # normalize the lm loss by number of tokens
-        lm_loss = self.criterion(x.contiguous().view(-1, x.size(-1)),
-                                 y.contiguous().view(-1))
-        lm_loss = lm_loss / norm
+        if self.seq_penalize_only_errors:
+            # TODO add code here
+        else:
+            lm_loss = self.criterion(x.contiguous().view(-1, x.size(-1)),
+                                     y.contiguous().view(-1))        
+            lm_loss = lm_loss / norm
         
         # normalize the clf loss by number of sentences
         clf_loss = self.clf_criterion(clf_logits, clf_gts)
