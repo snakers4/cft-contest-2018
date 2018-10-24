@@ -101,7 +101,7 @@ class ConditionalEncoderDecoder(nn.Module):
     other models.
     """
     def __init__(self, encoder, decoder, src_embed, trg_embed, generator, classifier, cn_embed):
-        super(EncoderDecoder, self).__init__()
+        super(ConditionalEncoderDecoder, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.src_embed = src_embed
@@ -135,7 +135,11 @@ class ConditionalEncoderDecoder(nn.Module):
                cn):
         
         embedded = self.src_embed(src) # concatenate country embeddings with token embeddings
+        
+        batch_size = embedded.size(0)
         cn_embedded = self.cn_embed(cn)
+        assert batch_size == cn_embedded.size(0)
+        cn_embedded = cn_embedded.view(batch_size,1,-1).expand_as(embedded)
         
         return self.encoder(torch.cat((embedded,cn_embedded),dim=-1),
                             src_mask,
@@ -151,7 +155,11 @@ class ConditionalEncoderDecoder(nn.Module):
                cn=None):
         
         embedded = self.trg_embed(trg) # concatenate country embeddings with token embeddings
-        cn_embedded = self.cn_embed(cn)       
+        
+        batch_size = embedded.size(0)
+        cn_embedded = self.cn_embed(cn)
+        assert batch_size == cn_embedded.size(0)
+        cn_embedded = cn_embedded.view(batch_size,1,-1).expand_as(embedded)    
         
         return self.decoder(torch.cat((embedded,cn_embedded),dim=-1),
                             encoder_hidden,

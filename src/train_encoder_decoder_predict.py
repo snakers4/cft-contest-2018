@@ -230,8 +230,8 @@ def main():
                        num_layers=args.num_layers,
                        dropout=args.dropout,
                        num_classes=args.num_classes,
-                       num_cn=num_cn,
-                       cn_emb_size=cn_emb_size)
+                       num_cn=args.num_cn,
+                       cn_emb_size=args.cn_emb_size)
     
     loaded_from_checkpoint = False
 
@@ -270,7 +270,7 @@ def main():
              'fullname_true':preds
             })
         
-        
+        predict_df.set_index('id').to_csv('predictions/{}.csv'.format(args.tb_name))
         
     else:
         print('Training starts...') 
