@@ -128,7 +128,7 @@ class ConditionalEncoderDecoder(nn.Module):
                            src_mask,
                            trg,
                            trg_mask,
-                           cn),clf_logits
+                           cn=cn),clf_logits
     
     def encode(self,
                src, src_mask, src_lengths,
@@ -137,9 +137,11 @@ class ConditionalEncoderDecoder(nn.Module):
         embedded = self.src_embed(src) # concatenate country embeddings with token embeddings
         
         batch_size = embedded.size(0)
+        sequence_size = embedded.size(1)
         cn_embedded = self.cn_embed(cn)
+        cn_embed_size = cn_embedded.size(1)
         assert batch_size == cn_embedded.size(0)
-        cn_embedded = cn_embedded.view(batch_size,1,-1).expand_as(embedded)
+        cn_embedded = cn_embedded.unsqueeze(1).expand(batch_size,sequence_size,cn_embed_size).contiguous()
         
         return self.encoder(torch.cat((embedded,cn_embedded),dim=-1),
                             src_mask,
@@ -157,9 +159,11 @@ class ConditionalEncoderDecoder(nn.Module):
         embedded = self.trg_embed(trg) # concatenate country embeddings with token embeddings
         
         batch_size = embedded.size(0)
+        sequence_size = embedded.size(1)
         cn_embedded = self.cn_embed(cn)
+        cn_embed_size = cn_embedded.size(1)
         assert batch_size == cn_embedded.size(0)
-        cn_embedded = cn_embedded.view(batch_size,1,-1).expand_as(embedded)    
+        cn_embedded = cn_embedded.unsqueeze(1).expand(batch_size,sequence_size,cn_embed_size).contiguous()  
         
         return self.decoder(torch.cat((embedded,cn_embedded),dim=-1),
                             encoder_hidden,
