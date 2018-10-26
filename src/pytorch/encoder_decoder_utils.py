@@ -99,13 +99,12 @@ class SimpleLossCompute:
     
 def cleaner(text):
     new_text = text
-    new_text = re.sub("[_\n/]", " ", new_text)
-    new_text = re.sub("[12345?[|]", "", new_text)
+    new_text = re.sub("[_\n/12345?[|,]", " ", new_text)
     new_text = re.sub("Є", "Е", new_text)
     return new_text
 
 def tokenize(text):
-    return list(cleaner(text))
+    return list(text)
 
 def greedy_decode_batch(model,
                         src, src_mask, src_lengths,

@@ -55,13 +55,11 @@ parser.add_argument('--cn_emb_size',    type=int,   default=0)
 parser.add_argument('--num_cn',         type=int,   default=0)
 
 # dataset
-parser.add_argument('--split_ratio',        type=float,    default=0.9)
-parser.add_argument('--stratified',         type=str2bool, default=True)
-parser.add_argument('--strata_field',       type=str,      default='cn') 
-parser.add_argument('--batch_size',         type=int,      default=256)
-parser.add_argument('--train_df_path',      type=str,      default='../data/proc_train.csv')
+parser.add_argument('--train_df_path',      type=str,      default='../data/proc_train.csv') # only to build a vocab
+parser.add_argument('--trn_df_path',        type=str,      default='../data/proc_trn.csv') # pre-made trainval splits
+parser.add_argument('--val_df_path',        type=str,      default='../data/proc_val.csv')
 parser.add_argument('--test_df_path',       type=str,      default='../data/proc_test.csv')
-parser.add_argument('--min_freq',           type=int,      default=1)
+parser.add_argument('--min_freq',           type=int,      default=0)
 
 # optimizer
 parser.add_argument('--lr',           type=float,    default=1e-3)
@@ -148,26 +146,31 @@ def main():
                   ("cn", CNT)
                  ]
 
-    train_data = data.TabularDataset(path=args.train_df_path,
+    trainval_data = data.TabularDataset(path=args.train_df_path,
                                      format='csv',
                                      skip_header=True,
-                                     fields=datafields)
+                                     fields=datafields)    
+    
+    train_data = data.TabularDataset(path=args.trn_df_path,
+                                   format='csv',
+                                   skip_header=True,
+                                   fields=datafields)
+    
+    val_data = data.TabularDataset(path=args.val_df_path,
+                                   format='csv',
+                                   skip_header=True,
+                                   fields=datafields)    
     
     test_data = data.TabularDataset(path=args.test_df_path,
                                     format='csv',
                                     skip_header=True,
                                     fields=datafields)    
-
-    train_data, valid_data = train_data.split(split_ratio=args.split_ratio,
-                                              stratified=args.stratified,
-                                              strata_field=args.strata_field)
-    
     
     print('Train length {}, val length {}'.format(len(train_data),len(valid_data)))
 
     MIN_FREQ = args.min_freq  # NOTE: we limit the vocabulary to frequent words for speed
-    NAMES.build_vocab(train_data.src, min_freq=MIN_FREQ)
-    TRG_NAMES.build_vocab(train_data.trg, min_freq=MIN_FREQ)
+    NAMES.build_vocab(trainval_data.src, min_freq=MIN_FREQ)
+    TRG_NAMES.build_vocab(trainval_data.trg, min_freq=MIN_FREQ)
     PAD_INDEX = TRG_NAMES.vocab.stoi[PAD_TOKEN]
 
     train_iter = data.BucketIterator(train_data,
@@ -209,12 +212,12 @@ def main():
 
     train_df = pd.read_csv('../data/proc_train.csv')
     train_df = train_df.set_index('id')
-    val_gts = train_df.loc[val_ids,'fullname_true'].values
-    val_ors = train_df.loc[val_ids,'fullname'].values
-    incorrect_idx = list(train_df[train_df.target==1].index.values)
-
-    incorrect_val_ids = list(set(val_ids).intersection(set(incorrect_idx)))
-    correct_val_ids = list(set(val_ids)-set(incorrect_val_ids))
+    
+    # val_gts = train_df.loc[val_ids,'fullname_true'].values
+    # val_ors = train_df.loc[val_ids,'fullname'].values
+    # incorrect_idx = list(train_df[train_df.target==1].index.values)
+    # incorrect_val_ids = list(set(val_ids).intersection(set(incorrect_idx)))
+    # correct_val_ids = list(set(val_ids)-set(incorrect_val_ids))
     
     print('Making dictionaries')
     
@@ -319,7 +322,7 @@ def train(model,
     # dev_perplexities = []
     # dev_preds = []
 
-    for epoch in range(num_epochs):
+    for epoch in range(args.start_epoch, num_epochs):
       
         print("Epoch", epoch)
         print('Training the model')
