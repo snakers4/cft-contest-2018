@@ -167,7 +167,7 @@ def main():
                                     skip_header=True,
                                     fields=datafields)    
     
-    print('Train length {}, val length {}'.format(len(train_data),len(valid_data)))
+    print('Train length {}, val length {}'.format(len(train_data),len(val_data)))
 
     MIN_FREQ = args.min_freq  # NOTE: we limit the vocabulary to frequent words for speed
     NAMES.build_vocab(trainval_data.src, min_freq=MIN_FREQ)
@@ -183,7 +183,7 @@ def main():
                                      device=DEVICE,
                                      shuffle=True)
 
-    valid_iter_batch = data.Iterator(valid_data,
+    valid_iter_batch = data.Iterator(val_data,
                                batch_size=args.batch_size,
                                train=False,
                                sort_within_batch=True,
