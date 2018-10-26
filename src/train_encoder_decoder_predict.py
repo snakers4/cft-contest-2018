@@ -254,7 +254,9 @@ def main():
             loaded_from_checkpoint = True
             del checkpoint
         else:
-            print("=> no checkpoint found at '{}'".format(args.resume))    
+            print("=> no checkpoint found at '{}'".format(args.resume))
+    else:
+        args.start_epoch = 0
     
     criterion = nn.CrossEntropyLoss(reduce=False).to(DEVICE)
 
