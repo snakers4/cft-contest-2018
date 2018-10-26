@@ -55,6 +55,7 @@ parser.add_argument('--cn_emb_size',    type=int,   default=0)
 parser.add_argument('--num_cn',         type=int,   default=0)
 
 # dataset
+parser.add_argument('--batch_size',         type=int,      default=256)
 parser.add_argument('--train_df_path',      type=str,      default='../data/proc_train.csv') # only to build a vocab
 parser.add_argument('--trn_df_path',        type=str,      default='../data/proc_trn.csv') # pre-made trainval splits
 parser.add_argument('--val_df_path',        type=str,      default='../data/proc_val.csv')
