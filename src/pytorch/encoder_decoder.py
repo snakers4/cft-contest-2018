@@ -32,7 +32,11 @@ def make_model(src_vocab,
             Encoder(emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
             Decoder(emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout),
             Generator(hidden_size, tgt_vocab),
-            Classifier(hidden_size, num_classes=num_classes, dropout=dropout))        
+            Classifier(hidden_size, num_classes=num_classes, dropout=dropout),
+            src_vocab,
+            tgt_vocab,
+            device
+        )        
     else:
         model = ConditionalEncoderDecoder(
             Encoder(emb_size+cn_emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
@@ -107,12 +111,16 @@ class EncoderDecoderOhe(nn.Module):
     A standard Encoder-Decoder architecture. Base for this and many 
     other models.
     """
-    def __init__(self, encoder, decoder, src_embed, trg_embed, generator, classifier):
+    def __init__(self, encoder, decoder, src_embed, trg_embed, generator, classifier,
+                 src_vocab, tgt_vocab, device):
         super(EncoderDecoderOhe, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.generator = generator
         self.classifier = classifier
+        self.device = device
+        self.src_vocab = src_vocab
+        self.tgt_vocab = tgt_vocab
         
     def forward(self,
                 src, trg,
@@ -120,12 +128,14 @@ class EncoderDecoderOhe(nn.Module):
                 src_lengths, trg_lengths,
                 cn):
         """Take in and process masked src and target sequences."""
-        # transform (batch,long ingex) to B
-        encoder_hidden, encoder_final = self.encode(src,
+        # oh-encode (batch,long index) to (batch,sequence,1)
+        src_oh = torch.FloatTensor(src.size(0), src.size(1), self.src_vocab).zero_().to(self.device)
+        src_oh.scatter_(2, src, 1)
+        
+        encoder_hidden, encoder_final = self.encode(src_oh,
                                                     src_mask,
                                                     src_lengths,
                                                     cn)
-        
         clf_logits = self.classifier(encoder_hidden)
         
         return self.decode(encoder_hidden,
@@ -138,7 +148,9 @@ class EncoderDecoderOhe(nn.Module):
     def encode(self,
                src, src_mask, src_lengths,
                cn):
-        return self.encoder(src,
+        src_oh = torch.FloatTensor(src.size(0), src.size(1), self.src_vocab).zero_().to(self.device)
+        src_oh.scatter_(2, src, 1)        
+        return self.encoder(src_oh,
                             src_mask,
                             src_lengths)
     
@@ -150,7 +162,9 @@ class EncoderDecoderOhe(nn.Module):
                trg_mask,
                decoder_hidden=None,
                cn=None):
-        return self.decoder(trg,
+        trg_oh = torch.FloatTensor(src.size(0), src.size(1), self.tgt_vocab).zero_().to(self.device)
+        trg_oh.scatter_(2, trg, 1)           
+        return self.decoder(trg_oh,
                             encoder_hidden,
                             encoder_final,
                             src_mask,
