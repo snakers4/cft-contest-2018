@@ -27,6 +27,12 @@ def make_model(src_vocab,
             nn.Embedding(tgt_vocab, emb_size),
             Generator(hidden_size, tgt_vocab),
             Classifier(hidden_size, num_classes=num_classes, dropout=dropout))
+    elif emb_size==1:
+        model = EncoderDecoderOhe(
+            Encoder(emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
+            Decoder(emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout),
+            Generator(hidden_size, tgt_vocab),
+            Classifier(hidden_size, num_classes=num_classes, dropout=dropout))        
     else:
         model = ConditionalEncoderDecoder(
             Encoder(emb_size+cn_emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
@@ -95,6 +101,62 @@ class EncoderDecoder(nn.Module):
                             trg_mask,
                             hidden=decoder_hidden,
                             )
+    
+class EncoderDecoderOhe(nn.Module):
+    """
+    A standard Encoder-Decoder architecture. Base for this and many 
+    other models.
+    """
+    def __init__(self, encoder, decoder, src_embed, trg_embed, generator, classifier):
+        super(EncoderDecoderOhe, self).__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.generator = generator
+        self.classifier = classifier
+        
+    def forward(self,
+                src, trg,
+                src_mask, trg_mask,
+                src_lengths, trg_lengths,
+                cn):
+        """Take in and process masked src and target sequences."""
+        # transform (batch,long ingex) to B
+        encoder_hidden, encoder_final = self.encode(src,
+                                                    src_mask,
+                                                    src_lengths,
+                                                    cn)
+        
+        clf_logits = self.classifier(encoder_hidden)
+        
+        return self.decode(encoder_hidden,
+                           encoder_final,
+                           src_mask,
+                           trg,
+                           trg_mask,
+                           cn=cn),clf_logits
+    
+    def encode(self,
+               src, src_mask, src_lengths,
+               cn):
+        return self.encoder(src,
+                            src_mask,
+                            src_lengths)
+    
+    def decode(self,
+               encoder_hidden,
+               encoder_final,
+               src_mask,
+               trg,
+               trg_mask,
+               decoder_hidden=None,
+               cn=None):
+        return self.decoder(trg,
+                            encoder_hidden,
+                            encoder_final,
+                            src_mask,
+                            trg_mask,
+                            hidden=decoder_hidden,
+                            )    
 
 class ConditionalEncoderDecoder(nn.Module):
     """

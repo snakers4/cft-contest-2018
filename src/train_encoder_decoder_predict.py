@@ -264,7 +264,20 @@ def main():
         writer = SummaryWriter('runs_encdec/{}'.format(tb_name))
     
     if args.evaluate:
-        pass
+        if not os.path.exists('eval/'):
+            os.makedirs('eval/')
+            
+        preds,clf_preds = predict((rebatch(PAD_INDEX, x) for x in valid_iter_batch),
+                                  model, max_len=70, src_vocab=NAMES.vocab, trg_vocab=TRG_NAMES.vocab,
+                                  num_batches=len(valid_iter_batch),return_logits=True)
+        
+        predict_df = pd.DataFrame(
+            {'id': val_ids,
+             'target': clf_preds,
+             'fullname_true':preds
+            })
+        
+        predict_df.set_index('id').to_csv('eval/{}.csv'.format(args.tb_name)) 
     elif args.predict:
         if not os.path.exists('predictions/'):
             os.makedirs('predictions/')
@@ -280,7 +293,6 @@ def main():
             })
         
         predict_df.set_index('id').to_csv('predictions/{}.csv'.format(args.tb_name))
-        
     else:
         print('Training starts...') 
         dev_perplexity,dev_clf_loss,preds,clf_preds = train(model,
