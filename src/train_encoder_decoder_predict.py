@@ -53,6 +53,7 @@ parser.add_argument('--hidden_size',    type=int,   default=256)
 parser.add_argument('--dropout',        type=float, default=0.2)
 parser.add_argument('--cn_emb_size',    type=int,   default=0)
 parser.add_argument('--num_cn',         type=int,   default=0)
+parser.add_argument('--heavy_decoder',  type=str2bool, default=False)
 
 # dataset
 parser.add_argument('--batch_size',         type=int,      default=256)
@@ -238,7 +239,8 @@ def main():
                        dropout=args.dropout,
                        num_classes=args.num_classes,
                        num_cn=args.num_cn,
-                       cn_emb_size=args.cn_emb_size)
+                       cn_emb_size=args.cn_emb_size,
+                       heavy_decoder=args.heavy_decoder)
     
     loaded_from_checkpoint = False
 

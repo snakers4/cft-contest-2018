@@ -14,18 +14,22 @@ def make_model(src_vocab,
                dropout=0.1,
                num_classes=3,
                num_cn=0,
-               cn_emb_size=0):
+               cn_emb_size=0,
+               heavy_decoder=False):
     "Helper: Construct a model from hyperparameters."
 
-    attention = BahdanauAttention(hidden_size)
+    if heavy_decoder:
+        attention = BahdanauAttention(hidden_size, query_size=hidden_size*2)
+    else:
+        attention = BahdanauAttention(hidden_size)
     
     if (num_cn+cn_emb_size) == 0:
         model = EncoderDecoder(
             Encoder(emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
-            Decoder(emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout),
+            Decoder(emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout, heavy_decoder=heavy_decoder),
             nn.Embedding(src_vocab, emb_size),
             nn.Embedding(tgt_vocab, emb_size),
-            Generator(hidden_size, tgt_vocab),
+            Generator(hidden_size*(1+heavy_decoder), tgt_vocab),
             Classifier(hidden_size, num_classes=num_classes, dropout=dropout))
     elif emb_size==1:
         model = EncoderDecoderOhe(
@@ -349,23 +353,36 @@ class Decoder(nn.Module):
     """A conditional RNN decoder with attention."""
     
     def __init__(self, emb_size, hidden_size, attention, num_layers=1, dropout=0.5,
-                 bridge=True):
+                 bridge=True, heavy_decoder=False):
         super(Decoder, self).__init__()
         
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.attention = attention
         self.dropout = dropout
-                 
-        self.rnn = nn.GRU(emb_size + 2*hidden_size, hidden_size, num_layers,
-                          batch_first=True, dropout=dropout)
-                 
-        # to initialize from the final encoder state
-        self.bridge = nn.Linear(2*hidden_size, hidden_size, bias=True) if bridge else None
+        
+        if heavy_decoder:
+            # the idea is not to create a bottleneck in the representation
+            # we have biGRU in the encoder vs GRU in the decoder 
+            self.rnn = nn.GRU(emb_size + 2*hidden_size, 2*hidden_size, num_layers,
+                              batch_first=True, dropout=dropout)
 
-        self.dropout_layer = nn.Dropout(p=dropout)
-        self.pre_output_layer = nn.Linear(hidden_size + 2*hidden_size + emb_size,
-                                          hidden_size, bias=False)
+            # to initialize from the final encoder state
+            self.bridge = nn.Linear(2*hidden_size, 2*hidden_size, bias=True) if bridge else None
+            
+            self.dropout_layer = nn.Dropout(p=dropout)
+            self.pre_output_layer = nn.Linear(2*hidden_size + 2*hidden_size + emb_size,
+                                              hidden_size, bias=False)            
+        else:
+            self.rnn = nn.GRU(emb_size + 2*hidden_size, hidden_size, num_layers,
+                              batch_first=True, dropout=dropout)
+                 
+            # to initialize from the final encoder state
+            self.bridge = nn.Linear(2*hidden_size, hidden_size, bias=True) if bridge else None
+
+            self.dropout_layer = nn.Dropout(p=dropout)
+            self.pre_output_layer = nn.Linear(hidden_size + 2*hidden_size + emb_size,
+                                              hidden_size, bias=False)
         
     def forward_step(self, prev_embed, encoder_hidden, src_mask, proj_key, hidden):
         """Perform a single decoder step (1 word)"""
