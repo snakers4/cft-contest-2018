@@ -266,6 +266,7 @@ def main():
         writer = SummaryWriter('runs_encdec/{}'.format(tb_name))
     
     if args.evaluate:
+        print('Running prediction on val set')
         if not os.path.exists('eval/'):
             os.makedirs('eval/')
             
@@ -280,7 +281,8 @@ def main():
             })
         
         predict_df.set_index('id').to_csv('eval/{}.csv'.format(args.tb_name)) 
-    elif args.predict:
+    if args.predict:
+        print('Running prediction on test set')
         if not os.path.exists('predictions/'):
             os.makedirs('predictions/')
             
@@ -295,7 +297,7 @@ def main():
             })
         
         predict_df.set_index('id').to_csv('predictions/{}.csv'.format(args.tb_name))
-    else:
+    if not arg.predict and not args.evaluate:
         print('Training starts...') 
         dev_perplexity,dev_clf_loss,preds,clf_preds = train(model,
                                                             lr=args.lr,
