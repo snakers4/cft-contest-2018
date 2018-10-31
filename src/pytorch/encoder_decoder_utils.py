@@ -290,3 +290,193 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+def get_beam_probs(encoder_hidden, encoder_final, src_mask,
+                   prev_y, trg_mask, hidden,
+                   cn=None):
+    
+    with torch.no_grad():
+        out, hidden, pre_output = model.decode(
+            encoder_hidden, encoder_final, src_mask,
+            prev_y, trg_mask, hidden,
+            cn=cn)
+
+        # we predict from the pre-output layer, which is
+        # a combination of Decoder state, prev emb, and context
+        prob = model.generator(pre_output[:, -1])
+        prob = F.softmax(prob, dim=1)
+        
+        return prob,hidden
+        
+def beam_decode_batch(model,
+                      src, src_mask, src_lengths,
+                      max_len=100,
+                      sos_index=1, eos_index=None,
+                      return_logits=False,
+                      cn=None,
+                      beam_width=3, device=None):
+    """Greedily decode a sentence."""
+    batch_size = src.size(0)
+    
+    with torch.no_grad():
+        encoder_hidden, encoder_final = model.encode(src, src_mask, src_lengths, cn)
+        clf_logits = model.classifier(encoder_hidden)
+        if return_logits:
+            pred_classes = clf_logits
+        else:
+            _, pred_classes = torch.max(clf_logits, dim=1)
+        pred_classes = pred_classes.data.cpu().numpy()
+        prev_y = torch.ones(batch_size, 1).fill_(sos_index).type_as(src)
+        trg_mask = torch.ones_like(prev_y)
+
+    # output = []
+    # attention_scores = []
+    # hidden = None
+
+    # init tensors used for batch-based beam search
+    hidden_tensor = None # (batch,num_sequences,hidden_size)
+    score_tensor = None  # (batch,num_sequences)
+    seq_tensor = None    # (batch,num_sequences,max_len)
+    
+    # walk over each step in sequence
+    for i in range(max_len):
+
+        if seq_tensor is None:
+            seq_len = 1
+        else:
+            seq_len = seq_tensor.size(1)
+        
+        # sequences is dynamically updated
+        # iterate over sequences
+        # for each sequence do the magic
+        
+        for j in range(seq_len):
+            if hidden_tensor is None:
+                # first hidden is initialized as None
+                hidden = None
+            else:
+                # we store only the current hidden state
+                hidden = hidden_tensor[:,j,:]
+                hidden.to(device)
+            
+            # use wrapper for readability
+            prob, hidden = get_beam_probs(encoder_hidden, encoder_final, src_mask,
+                                          prev_y, trg_mask, hidden,
+                                          cn=cn)
+            
+            # these tensors are (batch,beam_width)
+            scores, indices = torch.topk(input=prob,
+                                         k=beam_width,
+                                         dim=1)
+            scores = -torch.log(scores)
+            
+
+            # collect hidden states
+            # (batch,num_sequences,hidden_size)
+            if hidden_tensor is not None:
+                # hidden sizes are shared across sequences
+                # we store only the last ones on each step
+                hidden_tensor = torch.cat([hidden_tensor]
+                                          +beam_width*[hidden.detach().cpu().unsqueeze(dim=1)],
+                                          dim=1)
+            else:
+                hidden_tensor = torch.cat(beam_width*[hidden.detach().cpu().unsqueeze(dim=1)],
+                                          dim=1)                
+            
+            # collect indexes
+            # (batch,beam_width) => (batch,num_sequences,max_len)
+            if seq_tensor is not None:
+                # pad sequence tensor with -1
+                if seq_tensor.size(2) == i:
+                    # we assume that at the beginning of each operation
+                    # sequences tensor has only beam_width sequences
+                    seq_tensor = torch.cat([seq_tensor,
+                                            torch.ones(batch_size,
+                                                       beam_width,
+                                                       1)*(-1)],
+                                           dim=2)
+                
+                
+                # take old indices
+                old_seq_indices = new_indices[:,j:j+1,:].clone()
+                # repeat beam_width times to create several new sequences
+                new_indices = torch.cat(beam_width*[old_seq_indices],
+                                        dim=1)
+                # add new indices                
+                new_indices[:,:,i] = indices.detach().cpu().unsqueeze(dim=2)
+                # merge with seq tensor to create new sequences
+                seq_tensor = torch.cat([seq_tensor,new_indices],
+                                       dim=1)
+            else:
+                # convert first beam into sequences
+                seq_tensor = indices.detach().cpu().unsqueeze(dim=2)
+                assert seq_tensor.size() == (batch_size,beam_width,1)
+            
+            # update scores
+            # (batch,beam_width) => (batch,num_sequences)
+            if score_tensor is not None:
+                # multiply parent sequence's score by its children
+                parent_score = score_tensor[:,j:j+1].clone()
+                parent_score = torch.cat(beam_width*[parent_score],
+                                         dim=1)
+                children_scores = parent_score * scores
+                score_tensor = torch.cat([score_tensor,
+                                          children_scores],
+                                         dim=1)
+            else:
+                score_tensor = scores
+                
+        # remove the first beam_width sequences for simplicity
+        hidden_tensor = hidden_tensor[:,beam_width:,:]
+        score_tensor = score_tensor[:,beam_width:,:] 
+        seq_tensor = seq_tensor[:,beam_width:,:] 
+        
+        # select the best sequences to survive!
+        _, seq_indices = torch.topk(input=score_tensor,
+                                    k=beam_width,
+                                    dim=1)
+        
+        hidden_tensor = torch.gather(input=hidden_tensor,
+                                     dim=1,
+                                     index=seq_indices)
+        
+        score_tensor = torch.gather(input=score_tensor,
+                                    dim=1,
+                                    index=seq_indices)
+        
+        seq_tensor = torch.gather(input=seq_tensor,
+                                  dim=1,
+                                  index=seq_indices)        
+        
+        """
+
+        def beam_search_decoder(data, k):
+            sequences = [[list(), 1.0]]
+            # walk over each step in sequence
+            for row in data:
+                all_candidates = list()
+                # expand each current candidate
+                for i in range(len(sequences)):
+                    seq, score = sequences[i]
+                    for j in range(len(row)):
+                        candidate = [seq + [j], score * -log(row[j])]
+                        all_candidates.append(candidate)
+                # order all candidates by score
+                ordered = sorted(all_candidates, key=lambda tup:tup[1])
+                # select k best
+                sequences = ordered[:k]
+            return sequences
+
+
+
+        _, next_word = torch.max(prob, dim=1)
+        next_word = next_word.data
+        output.append(next_word.cpu().numpy())
+        prev_y = next_word.unsqueeze(dim=1)
+        # attention_scores.append(model.decoder.attention.alphas.cpu().numpy())
+        """
+        
+    output = np.array(output)
+    output = np.stack(output).T
+    
+    return output,pred_classes 
