@@ -255,6 +255,7 @@ def main():
             print("=> loaded checkpoint (epoch {})".format(checkpoint['epoch']))
             loaded_from_checkpoint = True
             del checkpoint
+            torch.cuda.empty_cache()
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
     else:
@@ -297,7 +298,7 @@ def main():
             })
         
         predict_df.set_index('id').to_csv('predictions/{}.csv'.format(args.tb_name))
-    if not arg.predict and not args.evaluate:
+    if not args.predict and not args.evaluate:
         print('Training starts...') 
         dev_perplexity,dev_clf_loss,preds,clf_preds = train(model,
                                                             lr=args.lr,
