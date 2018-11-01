@@ -153,56 +153,63 @@ def main():
     trainval_data = data.TabularDataset(path=args.train_df_path,
                                      format='csv',
                                      skip_header=True,
-                                     fields=datafields)    
+                                     fields=datafields)
     
-    train_data = data.TabularDataset(path=args.trn_df_path,
-                                   format='csv',
-                                   skip_header=True,
-                                   fields=datafields)
+    if not args.predict and not args.evaluate:
+        train_data = data.TabularDataset(path=args.trn_df_path,
+                                       format='csv',
+                                       skip_header=True,
+                                       fields=datafields)
+
+        val_data = data.TabularDataset(path=args.val_df_path,
+                                       format='csv',
+                                       skip_header=True,
+                                       fields=datafields)
+        
+        print('Train length {}, val length {}'.format(len(train_data),len(val_data)))        
     
-    val_data = data.TabularDataset(path=args.val_df_path,
-                                   format='csv',
-                                   skip_header=True,
-                                   fields=datafields)    
-    
-    test_data = data.TabularDataset(path=args.test_df_path,
-                                    format='csv',
-                                    skip_header=True,
-                                    fields=datafields)    
-    
-    print('Train length {}, val length {}'.format(len(train_data),len(val_data)))
+    if args.predict:
+        test_data = data.TabularDataset(path=args.test_df_path,
+                                        format='csv',
+                                        skip_header=True,
+                                        fields=datafields)    
 
     MIN_FREQ = args.min_freq  # NOTE: we limit the vocabulary to frequent words for speed
     NAMES.build_vocab(trainval_data.src, min_freq=MIN_FREQ)
     TRG_NAMES.build_vocab(trainval_data.trg, min_freq=MIN_FREQ)
     PAD_INDEX = TRG_NAMES.vocab.stoi[PAD_TOKEN]
-
-    train_iter = data.BucketIterator(train_data,
-                                     batch_size=args.batch_size,
-                                     train=True, 
-                                     sort_within_batch=True, 
-                                     sort_key=lambda x: (len(x.src), len(x.trg)),
-                                     repeat=False,
-                                     device=DEVICE,
-                                     shuffle=True)
-
-    valid_iter_batch = data.Iterator(val_data,
-                               batch_size=args.batch_size,
-                               train=False,
-                               sort_within_batch=True,
-                               sort_key=lambda x: (len(x.src), len(x.trg)),
-                               repeat=False, 
-                               device=DEVICE,
-                               shuffle=False)
     
-    test_iter_batch = data.Iterator(test_data,
-                                    batch_size=args.batch_size,
-                                    train=False,
-                                    sort_within_batch=True,
-                                    sort_key=lambda x: (len(x.src), len(x.trg)),
-                                    repeat=False, 
-                                    device=DEVICE,
-                                    shuffle=False)    
+    del trainval_data
+    gc.collect()
+
+    if not args.predict and not args.evaluate:
+        train_iter = data.BucketIterator(train_data,
+                                         batch_size=args.batch_size,
+                                         train=True, 
+                                         sort_within_batch=True, 
+                                         sort_key=lambda x: (len(x.src), len(x.trg)),
+                                         repeat=False,
+                                         device=DEVICE,
+                                         shuffle=True)
+
+        valid_iter_batch = data.Iterator(val_data,
+                                   batch_size=args.batch_size,
+                                   train=False,
+                                   sort_within_batch=True,
+                                   sort_key=lambda x: (len(x.src), len(x.trg)),
+                                   repeat=False, 
+                                   device=DEVICE,
+                                   shuffle=False)
+    
+    if args.predict:
+        test_iter_batch = data.Iterator(test_data,
+                                        batch_size=args.batch_size,
+                                        train=False,
+                                        sort_within_batch=True,
+                                        sort_key=lambda x: (len(x.src), len(x.trg)),
+                                        repeat=False, 
+                                        device=DEVICE,
+                                        shuffle=False)    
 
     val_ids = []
     for b in valid_iter_batch:
@@ -264,7 +271,7 @@ def main():
         args.start_epoch = 0
     
     criterion = nn.CrossEntropyLoss(reduce=False).to(DEVICE)
-
+    
     if args.tensorboard:
         writer = SummaryWriter('runs_encdec/{}'.format(tb_name))
     

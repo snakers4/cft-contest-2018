@@ -325,6 +325,7 @@ def beam_decode_batch(model,
                       debug=False):
     """Use beam search to decode a sentence."""
     batch_size = src.size(0)
+    end = time.time()
     
     with torch.no_grad():
         encoder_hidden, encoder_final = model.encode(src, src_mask, src_lengths, cn)
@@ -337,6 +338,9 @@ def beam_decode_batch(model,
         prev_y = torch.ones(batch_size, 1).fill_(sos_index).type_as(src)
         trg_mask = torch.ones_like(prev_y)
 
+    print('Encoder - {}'.format(time.time() - end))
+    end = time.time()
+
     # output = []
     # attention_scores = []
     # hidden = None
@@ -345,6 +349,9 @@ def beam_decode_batch(model,
     hidden_tensor = None # (num_layers * num_directions, batch, hidden_size, sequences)
     score_tensor  = None # (batch,num_sequences)
     seq_tensor    = None # (batch,num_sequences,max_len)
+    
+    prev_y_eos = torch.ones(batch_size).fill_(eos_index).long().to(device)
+    break_mask = torch.zeros(batch_size).byte().to(device)
     
     for i in range(max_len):
         if debug:
@@ -367,11 +374,15 @@ def beam_decode_batch(model,
                 hidden = None
             else:
                 # we store only the current hidden state
-                hidden = hidden_tensor[:,:,:,j].to(device)
+                hidden = hidden_tensor[:,:,:,j].contiguous() #.to(device)
                 if debug:
                     print(hidden_tensor.shape)
                 # do not forget to pass the last symbol
-                prev_y = seq_tensor[:,j,i-1:i].to(device)
+                prev_y = seq_tensor[:,j,i-1:i].contiguous() #.to(device)
+                
+                if i==0:
+                    prev_y = prev_y.unsqueeze(dim=1)
+                
 
             
             # use wrapper for readability
@@ -389,8 +400,9 @@ def beam_decode_batch(model,
                                            vocab=TRG_NAMES.vocab)))
 
             
-            scores = -torch.log(scores.detach().cpu())
-                        
+            # scores = -torch.log(scores.detach().cpu())
+            scores = -torch.log(scores)
+            
             assert scores.size(0) == batch_size
             assert indices.size(0) == batch_size
             assert scores.size(1) == beam_width
@@ -401,12 +413,22 @@ def beam_decode_batch(model,
             if hidden_tensor is not None:
                 # hidden sizes are shared across sequences
                 # we store only the last ones on each step
+                """
                 hidden_tensor = torch.cat([hidden_tensor]
                                           +beam_width*[hidden.detach().cpu().unsqueeze(dim=3)],
                                           dim=3)
+                """
+                hidden_tensor = torch.cat([hidden_tensor]
+                                          +beam_width*[hidden.unsqueeze(dim=3)],
+                                          dim=3).contiguous()                
+                
             else:
+                """
                 hidden_tensor = torch.cat(beam_width*[hidden.detach().cpu().unsqueeze(dim=3)],
-                                          dim=3)
+                                          dim=3)                
+                """
+                hidden_tensor = torch.cat(beam_width*[hidden.unsqueeze(dim=3)],
+                                          dim=3).contiguous() 
             
             # collect indexes
             # (batch,beam_width) => (batch,num_sequences,max_len)
@@ -418,7 +440,7 @@ def beam_decode_batch(model,
                     seq_tensor = torch.cat([seq_tensor,
                                             torch.ones(batch_size,
                                                        beam_width,
-                                                       1,dtype=torch.long)*(-1)],
+                                                       1,dtype=torch.long).to(device)*(-1)],
                                            dim=2)
                 
                 # take old indices
@@ -427,13 +449,13 @@ def beam_decode_batch(model,
                 new_indices = torch.cat(beam_width*[old_seq_indices],
                                         dim=1)
                 # add new indices  
-                new_indices[:,:,i] = indices.detach().cpu()
+                new_indices[:,:,i] = indices # .detach().cpu()
                 # merge with seq tensor to create new sequences
                 seq_tensor = torch.cat([seq_tensor,new_indices],
                                        dim=1)
             else:
                 # convert first beam into sequences
-                seq_tensor = indices.detach().cpu().unsqueeze(dim=2)
+                seq_tensor = indices.unsqueeze(dim=2) # .detach().cpu().unsqueeze(dim=2)
                 assert seq_tensor.size() == (batch_size,beam_width,1)
             
             # update scores
@@ -476,7 +498,6 @@ def beam_decode_batch(model,
         # print(seq_tensor.shape)
         # print(score_tensor.shape)
         # print(seq_indices.shape)           
-     
         
         # torch gather is not applicable due to different shape
         # for simplicity re-index manually
@@ -498,12 +519,21 @@ def beam_decode_batch(model,
                                dim=0).long()
         
         # break out of the cycle if all the last predictions were eos_index
-        prev_y_eos = torch.ones(batch_size, 1).fill_(eos_index).long()
         prev_y = seq_tensor[:,j,i-1:i].long()
-        if prev_y.equal(prev_y_eos):
+        if i==0:
+            # to pass to the model on the next step
+            prev_y = prev_y.unsqueeze(dim=1)
+            
+        mask = (prev_y.squeeze(dim=1) == prev_y_eos)
+        break_mask += mask
+        
+        if (break_mask>=1).sum()==512:
             if debug:
                 print('Breaking out of cycle early')
             break
+            
+        print('Iteration {} - {}'.format(i,time.time() - end))
+        end = time.time()
       
     # output = np.array(output)
     # output = np.stack(output).T
@@ -526,5 +556,8 @@ def beam_decode_batch(model,
         seq_tensor = seq_tensor.squeeze(dim=1)
     
     seq_tensor = seq_tensor.cpu().detach().numpy()
-        
+    
+    print('Postprocessing - {}'.format(time.time() - end))
+    end = time.time()
+    
     return seq_tensor,pred_classes 
