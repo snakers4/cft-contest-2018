@@ -223,8 +223,36 @@ def main():
         val_gts = [id2gt[_] for _ in val_ids]
         val_clf_gts = [id2clf_gt[_] for _ in val_ids]    
         del train_df
-        gc.collect()            
-    
+        gc.collect()    
+        
+    if args.evaluate:
+        valid_iter_batch = data.Iterator(val_data,
+                                   batch_size=args.batch_size,
+                                   train=False,
+                                   sort_within_batch=True,
+                                   sort_key=lambda x: (len(x.src), len(x.trg)),
+                                   repeat=False, 
+                                   device=DEVICE,
+                                   shuffle=False)
+        
+        val_ids = []
+        for b in valid_iter_batch:
+            val_ids.extend(list(b.id.cpu().numpy()))
+            
+        print('Preparing data for validation')
+
+        train_df = pd.read_csv('../data/proc_train.csv')
+        train_df = train_df.set_index('id')
+        
+        print('Making dictionaries')
+
+        id2gt = dict(train_df['fullname_true'])
+        id2clf_gt = dict(train_df['target'])
+        val_gts = [id2gt[_] for _ in val_ids]
+        val_clf_gts = [id2clf_gt[_] for _ in val_ids]    
+        del train_df
+        gc.collect()
+        
     if args.predict:
         test_iter_batch = data.Iterator(test_data,
                                         batch_size=args.batch_size,
