@@ -367,8 +367,7 @@ def beam_decode_batch(model,
                 hidden = None
             else:
                 # we store only the current hidden state
-                hidden = hidden_tensor[:,:,:,j]
-                hidden.to(device)
+                hidden = hidden_tensor[:,:,:,j].to(device)
                 if debug:
                     print(hidden_tensor.shape)
                 # do not forget to pass the last symbol
