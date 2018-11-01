@@ -226,6 +226,11 @@ def main():
         gc.collect()    
         
     if args.evaluate:
+        val_data = data.TabularDataset(path=args.val_df_path,
+                                       format='csv',
+                                       skip_header=True,
+                                       fields=datafields)
+        
         valid_iter_batch = data.Iterator(val_data,
                                    batch_size=args.batch_size,
                                    train=False,
