@@ -200,6 +200,30 @@ def main():
                                    repeat=False, 
                                    device=DEVICE,
                                    shuffle=False)
+        
+        val_ids = []
+        for b in valid_iter_batch:
+            val_ids.extend(list(b.id.cpu().numpy()))
+            
+        print('Preparing data for validation')
+
+        train_df = pd.read_csv('../data/proc_train.csv')
+        train_df = train_df.set_index('id')
+
+        # val_gts = train_df.loc[val_ids,'fullname_true'].values
+        # val_ors = train_df.loc[val_ids,'fullname'].values
+        # incorrect_idx = list(train_df[train_df.target==1].index.values)
+        # incorrect_val_ids = list(set(val_ids).intersection(set(incorrect_idx)))
+        # correct_val_ids = list(set(val_ids)-set(incorrect_val_ids))
+
+        print('Making dictionaries')
+
+        id2gt = dict(train_df['fullname_true'])
+        id2clf_gt = dict(train_df['target'])
+        val_gts = [id2gt[_] for _ in val_ids]
+        val_clf_gts = [id2clf_gt[_] for _ in val_ids]    
+        del train_df
+        gc.collect()            
     
     if args.predict:
         test_iter_batch = data.Iterator(test_data,
@@ -211,33 +235,12 @@ def main():
                                         device=DEVICE,
                                         shuffle=False)    
 
-    val_ids = []
-    for b in valid_iter_batch:
-        val_ids.extend(list(b.id.cpu().numpy()))
-        
-    test_ids = []
-    for b in test_iter_batch:
-        test_ids.extend(list(b.id.cpu().numpy()))         
-    
-    print('Preparing data for validation')
 
-    train_df = pd.read_csv('../data/proc_train.csv')
-    train_df = train_df.set_index('id')
-    
-    # val_gts = train_df.loc[val_ids,'fullname_true'].values
-    # val_ors = train_df.loc[val_ids,'fullname'].values
-    # incorrect_idx = list(train_df[train_df.target==1].index.values)
-    # incorrect_val_ids = list(set(val_ids).intersection(set(incorrect_idx)))
-    # correct_val_ids = list(set(val_ids)-set(incorrect_val_ids))
-    
-    print('Making dictionaries')
-    
-    id2gt = dict(train_df['fullname_true'])
-    id2clf_gt = dict(train_df['target'])
-    val_gts = [id2gt[_] for _ in val_ids]
-    val_clf_gts = [id2clf_gt[_] for _ in val_ids]    
-    del train_df
-    gc.collect()
+        
+        test_ids = []
+        for b in test_iter_batch:
+            test_ids.extend(list(b.id.cpu().numpy()))         
+
     
     model = make_model(len(NAMES.vocab),
                        len(TRG_NAMES.vocab),
