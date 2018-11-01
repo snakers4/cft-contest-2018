@@ -306,6 +306,13 @@ def get_beam_probs(encoder_hidden, encoder_final, src_mask,
         prob = model.generator(pre_output[:, -1])
         prob = F.softmax(prob, dim=1)
         
+        """
+        _, next_word = torch.max(prob, dim=1)
+        next_word = next_word.data
+        prev_y = next_word.unsqueeze(dim=1)        
+        
+        print(prev_y.shape)
+        """
     return prob,hidden
         
 def beam_decode_batch(model,
@@ -314,7 +321,8 @@ def beam_decode_batch(model,
                       sos_index=1, eos_index=None,
                       return_logits=False,
                       cn=None,
-                      beam_width=3, device=None):
+                      beam_width=3, device=None, values_to_return=1,
+                      debug=False):
     """Use beam search to decode a sentence."""
     batch_size = src.size(0)
     
@@ -339,7 +347,8 @@ def beam_decode_batch(model,
     seq_tensor    = None # (batch,num_sequences,max_len)
     
     for i in range(max_len):
-        print('i = {}'.format(i))
+        if debug:
+            print('i = {}'.format(i))
         # for first iteration asume there is already one sequence
         if seq_tensor is None:
             seq_len = 1
@@ -351,7 +360,8 @@ def beam_decode_batch(model,
         # for each sequence do the magic
         
         for j in range(seq_len):
-            print('j = {}'.format(j))
+            if debug:
+                print('j = {}'.format(j))
             if hidden_tensor is None:
                 # first hidden is initialized as None
                 hidden = None
@@ -359,6 +369,11 @@ def beam_decode_batch(model,
                 # we store only the current hidden state
                 hidden = hidden_tensor[:,:,:,j]
                 hidden.to(device)
+                if debug:
+                    print(hidden_tensor.shape)
+                # do not forget to pass the last symbol
+                prev_y = seq_tensor[:,j,i-1:i].to(device)
+
             
             # use wrapper for readability
             prob, hidden = get_beam_probs(encoder_hidden, encoder_final, src_mask,
@@ -369,8 +384,14 @@ def beam_decode_batch(model,
             scores, indices = torch.topk(input=prob,
                                          k=beam_width,
                                          dim=1)
-            scores = -torch.log(scores)
+            if debug:
+                print(scores[0])
+                print("".join(lookup_words(list(indices[0]),
+                                           vocab=TRG_NAMES.vocab)))
+
             
+            scores = -torch.log(scores.detach().cpu())
+                        
             assert scores.size(0) == batch_size
             assert indices.size(0) == batch_size
             assert scores.size(1) == beam_width
@@ -423,7 +444,7 @@ def beam_decode_batch(model,
                 parent_score = score_tensor[:,j:j+1].clone()
                 parent_score = torch.cat(beam_width*[parent_score],
                                          dim=1)
-                children_scores = parent_score * scores
+                children_scores = parent_score + scores
                 score_tensor = torch.cat([score_tensor,
                                           children_scores],
                                          dim=1)
@@ -442,23 +463,20 @@ def beam_decode_batch(model,
         # select the best sequences to survive!
         _, seq_indices = torch.topk(input=score_tensor,
                                     k=beam_width,
-                                    dim=1)
+                                    dim=1,
+                                    largest=False)
+
+        # print(score_tensor[0])
         
         # batch and sequence dimension are equal
         assert hidden_tensor.size(1) == score_tensor.size(0)
         assert hidden_tensor.size(3) == score_tensor.size(1)
         assert score_tensor.size()[0:2] == seq_tensor.size()[0:2]
-        
-        """
-        hidden_tensor = torch.gather(input=hidden_tensor,
-                                     dim=1,
-                                     index=seq_indices)
-        """
 
-        print(hidden_tensor.shape)
-        print(seq_tensor.shape)
-        print(score_tensor.shape)
-        print(seq_indices.shape)           
+        # print(hidden_tensor.shape)
+        # print(seq_tensor.shape)
+        # print(score_tensor.shape)
+        # print(seq_indices.shape)           
      
         
         # torch gather is not applicable due to different shape
@@ -480,43 +498,34 @@ def beam_decode_batch(model,
                                 for _ in range(batch_size)],
                                dim=0).long()
         
-       
-        print(hidden_tensor.shape)
-        print(seq_tensor.shape)
-        print(score_tensor.shape)
-        print(seq_indices.shape)    
-        
-        print(seq_tensor.type())
-        
-        """
-
-        def beam_search_decoder(data, k):
-            sequences = [[list(), 1.0]]
-            # walk over each step in sequence
-            for row in data:
-                all_candidates = list()
-                # expand each current candidate
-                for i in range(len(sequences)):
-                    seq, score = sequences[i]
-                    for j in range(len(row)):
-                        candidate = [seq + [j], score * -log(row[j])]
-                        all_candidates.append(candidate)
-                # order all candidates by score
-                ordered = sorted(all_candidates, key=lambda tup:tup[1])
-                # select k best
-                sequences = ordered[:k]
-            return sequences
-
-
-
-        _, next_word = torch.max(prob, dim=1)
-        next_word = next_word.data
-        output.append(next_word.cpu().numpy())
-        prev_y = next_word.unsqueeze(dim=1)
-        # attention_scores.append(model.decoder.attention.alphas.cpu().numpy())
-        """
-        
+        # break out of the cycle if all the last predictions were eos_index
+        prev_y_eos = torch.ones(batch_size, 1).fill_(eos_index).long()
+        prev_y = seq_tensor[:,j,i-1:i].long()
+        if prev_y.equal(prev_y_eos):
+            if debug:
+                print('Breaking out of cycle early')
+            break
+      
     # output = np.array(output)
     # output = np.stack(output).T
     
+    # select only the best of the best
+    _, seq_indices = torch.topk(input=score_tensor,
+                                k=values_to_return,
+                                dim=1,
+                                largest=False)
+    
+    seq_tensor = torch.cat([seq_tensor[_:_+1,
+                                       seq_indices[_],
+                                       :]
+                            for _ in range(batch_size)],
+                           dim=0).long()
+    
+    # shed extra dimension for compatibility
+    if values_to_return==1:
+        assert seq_tensor.size(1)==1
+        seq_tensor = seq_tensor.squeeze(dim=1)
+    
+    seq_tensor = seq_tensor.cpu().detach().numpy()
+        
     return seq_tensor,pred_classes 

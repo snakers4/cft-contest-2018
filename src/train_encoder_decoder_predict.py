@@ -32,6 +32,7 @@ from pytorch.encoder_decoder_utils import (Batch,rebatch,
                                            cleaner,
                                            tokenize,
                                            greedy_decode_batch,
+                                           beam_decode_batch,
                                            lookup_words,
                                            run_epoch
                                            )
@@ -54,6 +55,7 @@ parser.add_argument('--dropout',        type=float, default=0.2)
 parser.add_argument('--cn_emb_size',    type=int,   default=0)
 parser.add_argument('--num_cn',         type=int,   default=0)
 parser.add_argument('--heavy_decoder',  type=str2bool, default=False)
+parser.add_argument('--beam_width',     type=int,   default=0)
 
 # dataset
 parser.add_argument('--batch_size',         type=int,      default=256)
@@ -436,6 +438,7 @@ def predict(example_iter, model, max_len=100,
             return_logits=False):
 
     global UNK_TOKEN,PAD_TOKEN,SOS_TOKEN,EOS_TOKEN,TRG_NAMES,LOWER
+    global args, DEVICE
     model.eval()
     count = 0
     print()
@@ -454,12 +457,20 @@ def predict(example_iter, model, max_len=100,
 
     with tqdm(total=num_batches) as pbar:
         for i, batch in enumerate(example_iter):
-
-            output, pred_classes = greedy_decode_batch(
-                model, batch.src, batch.src_mask, batch.src_lengths,
-                max_len=max_len, sos_index=trg_sos_index, eos_index=trg_eos_index,
-                return_logits=return_logits,cn=batch.cn
-            )
+            
+            if args.beam_width==0:
+                output, pred_classes = greedy_decode_batch(
+                    model, batch.src, batch.src_mask, batch.src_lengths,
+                    max_len=max_len, sos_index=trg_sos_index, eos_index=trg_eos_index,
+                    return_logits=return_logits,cn=batch.cn
+                )
+            else:
+                output, pred_classes = beam_decode_batch(
+                    model, batch.src, batch.src_mask, batch.src_lengths,
+                    max_len=max_len, sos_index=trg_sos_index, eos_index=trg_eos_index,
+                    return_logits=return_logits,cn=batch.cn,
+                    device=DEVICE,beam_width=args.beam_width,values_to_return=1
+                )
 
             clf_preds.extend(list(pred_classes))
             
