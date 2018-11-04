@@ -63,6 +63,8 @@ parser.add_argument('--train_df_path',      type=str,      default='../data/proc
 parser.add_argument('--trn_df_path',        type=str,      default='../data/proc_trn.csv') # pre-made trainval splits
 parser.add_argument('--val_df_path',        type=str,      default='../data/proc_val.csv')
 parser.add_argument('--test_df_path',       type=str,      default='../data/proc_test.csv')
+parser.add_argument('--bpe_model',          type=str,      default='')
+
 parser.add_argument('--min_freq',           type=int,      default=0)
 
 # optimizer
@@ -70,6 +72,7 @@ parser.add_argument('--lr',           type=float,    default=1e-3)
 parser.add_argument('--epochs',       type=int,      default=50)
 parser.add_argument('--seed',         type=int,      default=42)
 parser.add_argument('--clf_coeff',    type=float,    default=1.0)
+parser.add_argument('--lr_factor',    type=float,    default=0.5)
 
 parser.add_argument('--seq_penalize_only_errors', type=str2bool, default=False)
 
@@ -115,7 +118,14 @@ def main():
     SOS_TOKEN = "["
     EOS_TOKEN = "]"
     LOWER = False
-
+    
+    # use sentence piece instead of plain list
+    if args.bpe_model != '':
+        tokenizer   = Tokenizer(args.bpe_model)
+        text2pieces = tokenizer.enc_text2pieces
+        pieces2text = tokenizer.dec_pieces2text
+        tokenize    = text2pieces
+    
     ID = data.Field(sequential=False,
                     use_vocab=False)
 
@@ -379,10 +389,10 @@ def train(model,
     optim = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = ReduceLROnPlateau(optim,
                                   mode='max',
-                                  factor=0.5,
+                                  factor=args.lr_factor,
                                   patience=5,
                                   verbose=True,
-                                  min_lr=1e-5)    
+                                  min_lr=1e-7)    
     
     # dev_perplexities = []
     # dev_preds = []
@@ -482,9 +492,9 @@ def predict(example_iter, model, max_len=100,
 
     global UNK_TOKEN,PAD_TOKEN,SOS_TOKEN,EOS_TOKEN,TRG_NAMES,LOWER
     global args, DEVICE
+    global pieces2text
     model.eval()
     count = 0
-    print()
     
     if src_vocab is not None and trg_vocab is not None:
         src_eos_index = src_vocab.stoi[EOS_TOKEN]
@@ -525,11 +535,23 @@ def predict(example_iter, model, max_len=100,
                     first_eos = np.where(pred==trg_eos_index)[0]
                     if len(first_eos) > 0:
                         # produce sentences
-                        preds.append("".join(lookup_words(pred[:first_eos[0]],
+                        if args.bpe_model != '':
+                            _ = lookup_words(pred[:first_eos[0]],
+                                             vocab=TRG_NAMES.vocab)                           
+                            _ = pieces2text(_)
+                            preds.append(_)
+                        else:
+                            preds.append("".join(lookup_words(pred[:first_eos[0]],
                                              vocab=TRG_NAMES.vocab)))
                     else:
-                        preds.append("".join(lookup_words(pred[:],
-                                             vocab=TRG_NAMES.vocab)))                        
+                        if args.bpe_model != '':
+                            _ = lookup_words(pred[:],
+                                             vocab=TRG_NAMES.vocab)
+                            _ = pieces2text(_)
+                            preds.append(_)
+                        else:
+                            preds.append("".join(lookup_words(pred[:],
+                                                              vocab=TRG_NAMES.vocab)))                            
             pbar.update(1)
     return preds,clf_preds            
 

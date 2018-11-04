@@ -13,6 +13,8 @@ import torch.nn.functional as F
 from torchtext import data, datasets
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
+import sentencepiece as spm
+
 class Batch:
     """Object for holding a batch of data with mask during training.
     Input is a batch from a torch text iterator.
@@ -105,6 +107,26 @@ def cleaner(text):
 
 def tokenize(text):
     return list(text)
+
+class Tokenizer(object):
+    def __init__(self,
+                 model_path,
+                 models_dir='bpe_models/'):
+        sp = spm.SentencePieceProcessor()
+        sp.Load(os.path.join(models_dir,model_path))
+        self.sp = sp
+        
+    def tokenize(self,text):
+        return self.sp.EncodeAsPieces(text)
+    
+    def enc_text2seq(self,text):
+        return self.sp.EncodeAsIds(text)
+
+    def enc_text2pieces(self,text):
+        return self.sp.EncodeAsPieces(text)
+
+    def dec_pieces2text(self,piece_list):
+        return self.sp.DecodePieces(piece_list)
 
 def greedy_decode_batch(model,
                         src, src_mask, src_lengths,
@@ -325,7 +347,8 @@ def beam_decode_batch(model,
                       debug=False):
     """Use beam search to decode a sentence."""
     batch_size = src.size(0)
-    end = time.time()
+    if debug:
+        end = time.time()
     
     with torch.no_grad():
         encoder_hidden, encoder_final = model.encode(src, src_mask, src_lengths, cn)
@@ -338,8 +361,9 @@ def beam_decode_batch(model,
         prev_y = torch.ones(batch_size, 1).fill_(sos_index).type_as(src)
         trg_mask = torch.ones_like(prev_y)
 
-    print('Encoder - {}'.format(time.time() - end))
-    end = time.time()
+    if debug:
+        print('Encoder - {}'.format(time.time() - end))
+        end = time.time()
 
     # output = []
     # attention_scores = []
@@ -531,9 +555,10 @@ def beam_decode_batch(model,
             if debug:
                 print('Breaking out of cycle early')
             break
-            
-        print('Iteration {} - {}'.format(i,time.time() - end))
-        end = time.time()
+        
+        if debug:
+            print('Iteration {} - {}'.format(i,time.time() - end))
+            end = time.time()
       
     # output = np.array(output)
     # output = np.stack(output).T
@@ -557,7 +582,8 @@ def beam_decode_batch(model,
     
     seq_tensor = seq_tensor.cpu().detach().numpy()
     
-    print('Postprocessing - {}'.format(time.time() - end))
-    end = time.time()
+    if debug:
+        print('Postprocessing - {}'.format(time.time() - end))
+        end = time.time()
     
     return seq_tensor,pred_classes 
