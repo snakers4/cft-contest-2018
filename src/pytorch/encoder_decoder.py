@@ -25,14 +25,24 @@ def make_model(src_vocab,
         attention = BahdanauAttention(hidden_size)
     
     if (num_cn+cn_emb_size) == 0:
-        model = EncoderDecoder(
-            Encoder(emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
-            Decoder(emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout,
-                    heavy_decoder=heavy_decoder,add_input_skip=add_input_skip),
-            nn.Embedding(src_vocab, emb_size),
-            nn.Embedding(tgt_vocab, emb_size),
-            Generator(hidden_size, tgt_vocab),
-            Classifier(hidden_size, num_classes=num_classes, dropout=dropout))
+        if add_input_skip:
+            model = EncoderDecoderSkip(
+                Encoder(emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
+                Decoder(emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout,
+                        heavy_decoder=heavy_decoder,add_input_skip=True),
+                nn.Embedding(src_vocab, emb_size),
+                nn.Embedding(tgt_vocab, emb_size),
+                Generator(hidden_size, tgt_vocab),
+                Classifier(hidden_size, num_classes=num_classes, dropout=dropout))        
+        else:
+            model = EncoderDecoder(
+                Encoder(emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
+                Decoder(emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout,
+                        heavy_decoder=heavy_decoder,add_input_skip=False),
+                nn.Embedding(src_vocab, emb_size),
+                nn.Embedding(tgt_vocab, emb_size),
+                Generator(hidden_size, tgt_vocab),
+                Classifier(hidden_size, num_classes=num_classes, dropout=dropout))
     elif emb_size==1:
         model = EncoderDecoderOhe(
             Encoder(emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
@@ -111,6 +121,66 @@ class EncoderDecoder(nn.Module):
                             trg_mask,
                             hidden=decoder_hidden,
                             )
+
+class EncoderDecoderSkip(nn.Module):
+    """
+    A standard Encoder-Decoder architecture. Base for this and many 
+    other models.
+    """
+    def __init__(self, encoder, decoder, src_embed, trg_embed, generator, classifier):
+        super(EncoderDecoderSkip, self).__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.src_embed = src_embed
+        self.trg_embed = trg_embed
+        self.generator = generator
+        self.classifier = classifier
+        
+    def forward(self,
+                src, trg,
+                src_mask, trg_mask,
+                src_lengths, trg_lengths,
+                cn):
+        """Take in and process masked src and target sequences."""
+        encoder_hidden, encoder_final = self.encode(src,
+                                                    src_mask,
+                                                    src_lengths,
+                                                    cn)
+        
+        clf_logits = self.classifier(encoder_hidden)
+        
+        return self.decode(encoder_hidden,
+                           encoder_final,
+                           src_mask,
+                           trg,
+                           trg_mask,
+                           cn=cn,
+                           skip=src),clf_logits
+    
+    def encode(self,
+               src, src_mask, src_lengths,
+               cn):
+        return self.encoder(self.src_embed(src),
+                            src_mask,
+                            src_lengths)
+    
+    def decode(self,
+               encoder_hidden,
+               encoder_final,
+               src_mask,
+               trg,
+               trg_mask,
+               decoder_hidden=None,
+               cn=None,
+               skip=None):
+        return self.decoder(self.trg_embed(trg),
+                            encoder_hidden,
+                            encoder_final,
+                            src_mask,
+                            trg_mask,
+                            hidden=decoder_hidden,
+                            skip=self.src_embed(skip)
+                            )    
     
 class EncoderDecoderOhe(nn.Module):
     """
@@ -387,7 +457,8 @@ class Decoder(nn.Module):
             self.pre_output_layer = nn.Linear(hidden_size + 2*hidden_size + emb_size*(1+add_input_skip),
                                               hidden_size, bias=False)
         
-    def forward_step(self, prev_embed, encoder_hidden, src_mask, proj_key, hidden):
+    def forward_step(self, prev_embed, encoder_hidden, src_mask, proj_key, hidden,
+                     skip=None):
         """Perform a single decoder step (1 word)"""
 
         # compute context vector using attention mechanism
@@ -400,14 +471,18 @@ class Decoder(nn.Module):
         rnn_input = torch.cat([prev_embed, context], dim=2)
         output, hidden = self.rnn(rnn_input, hidden)
         
-        pre_output = torch.cat([prev_embed, output, context], dim=2)
+        if self.add_input_skip:
+            # also add input sequence embedding
+            pre_output = torch.cat([prev_embed, output, context, skip], dim=2)
+        else:
+            pre_output = torch.cat([prev_embed, output, context], dim=2)
         pre_output = self.dropout_layer(pre_output)
         pre_output = self.pre_output_layer(pre_output)
 
         return output, hidden, pre_output
     
     def forward(self, trg_embed, encoder_hidden, encoder_final, 
-                src_mask, trg_mask, hidden=None, max_len=None):
+                src_mask, trg_mask, hidden=None, max_len=None, skip=None):
         """Unroll the decoder one step at a time."""
                                          
         # the maximum number of steps to unroll the RNN
@@ -431,7 +506,8 @@ class Decoder(nn.Module):
         for i in range(max_len):
             prev_embed = trg_embed[:, i].unsqueeze(1)
             output, hidden, pre_output = self.forward_step(
-              prev_embed, encoder_hidden, src_mask, proj_key, hidden)
+                prev_embed, encoder_hidden, src_mask, proj_key, hidden,
+                skip=skip)
             decoder_states.append(output)
             pre_output_vectors.append(pre_output)
 

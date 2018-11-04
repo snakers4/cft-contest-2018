@@ -274,7 +274,7 @@ def train(model,
                                   factor=0.5,
                                   patience=5,
                                   verbose=True,
-                                  min_lr=1e-5)    
+                                  min_lr=1e-6)    
     
     # dev_perplexities = []
     # dev_preds = []

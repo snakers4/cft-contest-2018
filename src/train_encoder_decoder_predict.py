@@ -54,8 +54,9 @@ parser.add_argument('--hidden_size',    type=int,   default=256)
 parser.add_argument('--dropout',        type=float, default=0.2)
 parser.add_argument('--cn_emb_size',    type=int,   default=0)
 parser.add_argument('--num_cn',         type=int,   default=0)
-parser.add_argument('--heavy_decoder',  type=str2bool, default=False)
 parser.add_argument('--beam_width',     type=int,   default=0)
+parser.add_argument('--heavy_decoder',  type=str2bool, default=False)
+parser.add_argument('--add_skip',       type=str2bool, default=False)
 
 # dataset
 parser.add_argument('--batch_size',         type=int,      default=256)
@@ -295,7 +296,8 @@ def main():
                        num_classes=args.num_classes,
                        num_cn=args.num_cn,
                        cn_emb_size=args.cn_emb_size,
-                       heavy_decoder=args.heavy_decoder)
+                       heavy_decoder=args.heavy_decoder,
+                       add_input_skip=args.add_skip)
     
     loaded_from_checkpoint = False
 
@@ -515,14 +517,16 @@ def predict(example_iter, model, max_len=100,
                 output, pred_classes = greedy_decode_batch(
                     model, batch.src, batch.src_mask, batch.src_lengths,
                     max_len=max_len, sos_index=trg_sos_index, eos_index=trg_eos_index,
-                    return_logits=return_logits,cn=batch.cn
+                    return_logits=return_logits,cn=batch.cn,
+                    add_skip=args.add_skip
                 )
             else:
                 output, pred_classes = beam_decode_batch(
                     model, batch.src, batch.src_mask, batch.src_lengths,
                     max_len=max_len, sos_index=trg_sos_index, eos_index=trg_eos_index,
                     return_logits=return_logits,cn=batch.cn,
-                    device=DEVICE,beam_width=args.beam_width,values_to_return=1
+                    device=DEVICE,beam_width=args.beam_width,values_to_return=1,
+                    add_skip=args.add_skip
                 )
 
             clf_preds.extend(list(pred_classes))

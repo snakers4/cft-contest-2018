@@ -133,7 +133,7 @@ def greedy_decode_batch(model,
                         max_len=100,
                         sos_index=1, eos_index=None,
                         return_logits=False,
-                        cn=None):
+                        cn=None,add_skip=None):
     """Greedily decode a sentence."""
     batch_size = src.size(0)
     
@@ -154,10 +154,16 @@ def greedy_decode_batch(model,
 
     for i in range(max_len):
         with torch.no_grad():
-            out, hidden, pre_output = model.decode(
-              encoder_hidden, encoder_final, src_mask,
-              prev_y, trg_mask, hidden,
-              cn=cn)
+            if add_skip:
+                out, hidden, pre_output = model.decode(
+                  encoder_hidden, encoder_final, src_mask,
+                  prev_y, trg_mask, hidden,
+                  cn=cn, skip=src)                
+            else:
+                out, hidden, pre_output = model.decode(
+                  encoder_hidden, encoder_final, src_mask,
+                  prev_y, trg_mask, hidden,
+                  cn=cn)
 
             # we predict from the pre-output layer, which is
             # a combination of Decoder state, prev emb, and context
@@ -315,13 +321,20 @@ class AverageMeter(object):
 
 def get_beam_probs(encoder_hidden, encoder_final, src_mask,
                    prev_y, trg_mask, hidden,
-                   cn=None, model=None):
+                   cn=None, model=None,
+                   add_skip=False, src=None):
     
     with torch.no_grad():
-        out, hidden, pre_output = model.decode(
-            encoder_hidden, encoder_final, src_mask,
-            prev_y, trg_mask, hidden,
-            cn=cn)
+        if add_skip:
+            out, hidden, pre_output = model.decode(
+                encoder_hidden, encoder_final, src_mask,
+                prev_y, trg_mask, hidden,
+                cn=cn, skip=src)            
+        else:
+            out, hidden, pre_output = model.decode(
+                encoder_hidden, encoder_final, src_mask,
+                prev_y, trg_mask, hidden,
+                cn=cn)
 
         # we predict from the pre-output layer, which is
         # a combination of Decoder state, prev emb, and context
@@ -344,7 +357,7 @@ def beam_decode_batch(model,
                       return_logits=False,
                       cn=None,
                       beam_width=3, device=None, values_to_return=1,
-                      debug=False):
+                      debug=False, add_skip=None):
     """Use beam search to decode a sentence."""
     batch_size = src.size(0)
     if debug:
@@ -412,7 +425,7 @@ def beam_decode_batch(model,
             # use wrapper for readability
             prob, hidden = get_beam_probs(encoder_hidden, encoder_final, src_mask,
                                           prev_y, trg_mask, hidden,
-                                          cn=cn, model=model)
+                                          cn=cn, model=model, add_skip=add_skip, src=src)
            
             # these tensors are (batch,beam_width)
             scores, indices = torch.topk(input=prob,
