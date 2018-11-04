@@ -127,6 +127,10 @@ def main():
         text2pieces = tokenizer.enc_text2pieces
         pieces2text = tokenizer.dec_pieces2text
         tokenize    = text2pieces
+        print('BPE Tokenizer loaded!')
+        print(args.bpe_model)
+    else:
+        from pytorch.encoder_decoder_utils import tokenize        
     
     ID = data.Field(sequential=False,
                     use_vocab=False)
