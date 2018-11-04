@@ -112,6 +112,7 @@ def main():
     global USE_CUDA,DEVICE
     global UNK_TOKEN,PAD_TOKEN,SOS_TOKEN,EOS_TOKEN,TRG_NAMES,LOWER,PAD_INDEX,NAMES,MIN_FREQ
     global args,best_met,valid_minib_counter
+    global pieces2text
 
     label_writers = []
 
