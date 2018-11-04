@@ -34,7 +34,8 @@ from pytorch.encoder_decoder_utils import (Batch,rebatch,
                                            greedy_decode_batch,
                                            beam_decode_batch,
                                            lookup_words,
-                                           run_epoch
+                                           run_epoch,
+                                           Tokenizer
                                            )
 
 from pytorch.metrics import (score_task1,
