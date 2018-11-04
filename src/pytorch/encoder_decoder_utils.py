@@ -133,7 +133,7 @@ def greedy_decode_batch(model,
                         max_len=100,
                         sos_index=1, eos_index=None,
                         return_logits=False,
-                        cn=None,add_skip=None):
+                        cn=None,add_skip=False):
     """Greedily decode a sentence."""
     batch_size = src.size(0)
     
@@ -357,7 +357,7 @@ def beam_decode_batch(model,
                       return_logits=False,
                       cn=None,
                       beam_width=3, device=None, values_to_return=1,
-                      debug=False, add_skip=None):
+                      debug=False, add_skip=False):
     """Use beam search to decode a sentence."""
     batch_size = src.size(0)
     if debug:
