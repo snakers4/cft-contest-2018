@@ -517,6 +517,8 @@ class Decoder(nn.Module):
         if self.add_input_skip:
             # also for the skip connection
             skip_key = self.skip_attention.key_layer(skip)
+        else:
+            skip_key = None
         
         # here we store all intermediate hidden states and pre-output vectors
         decoder_states = []
