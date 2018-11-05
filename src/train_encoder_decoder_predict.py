@@ -59,6 +59,8 @@ parser.add_argument('--beam_width',     type=int,   default=0)
 parser.add_argument('--heavy_decoder',  type=str2bool, default=False)
 parser.add_argument('--add_skip',       type=str2bool, default=False)
 
+parser.add_argument('--load_optimizer_state',  type=str2bool, default=False)
+
 # dataset
 parser.add_argument('--batch_size',         type=int,      default=256)
 parser.add_argument('--train_df_path',      type=str,      default='../data/proc_train.csv') # only to build a vocab
@@ -316,6 +318,7 @@ def main():
             best_met = checkpoint['best_met']
             model.load_state_dict(checkpoint['state_dict'])           
             print("=> loaded checkpoint (epoch {})".format(checkpoint['epoch']))
+            
             loaded_from_checkpoint = True
             del checkpoint
             torch.cuda.empty_cache()
@@ -395,6 +398,12 @@ def train(model,
     clf_criterion = nn.CrossEntropyLoss()
     
     optim = torch.optim.Adam(model.parameters(), lr=lr)
+    
+    if args.load_optimizer_state:
+        optim.load_state_dict(checkpoint['optimizer'])
+    else:
+        print('Optimizer state NOT loaded')     
+        
     scheduler = ReduceLROnPlateau(optim,
                                   mode='max',
                                   factor=args.lr_factor,
@@ -481,6 +490,7 @@ def train(model,
             save_checkpoint({
                     'epoch': epoch + 1,
                     'state_dict': model.state_dict(),
+                    'optimizer': optim.state_dict(),                
                     'best_met': best_met,
                     },
                     is_best,
