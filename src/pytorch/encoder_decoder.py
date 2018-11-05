@@ -21,15 +21,22 @@ def make_model(src_vocab,
 
     if heavy_decoder:
         attention = BahdanauAttention(hidden_size, query_size=hidden_size*2)
+        if add_input_skip:
+            skip_attention = BahdanauAttention(hidden_size,
+                                               query_size=hidden_size*2,
+                                               key_size=hidden_size)        
     else:
         attention = BahdanauAttention(hidden_size)
+        if add_input_skip:
+            skip_attention = BahdanauAttention(hidden_size,
+                                               key_size=hidden_size)         
     
     if (num_cn+cn_emb_size) == 0:
         if add_input_skip:
             model = EncoderDecoderSkip(
                 Encoder(emb_size, hidden_size, num_layers=num_layers, dropout=dropout),
                 Decoder(emb_size, hidden_size, attention, num_layers=num_layers, dropout=dropout,
-                        heavy_decoder=heavy_decoder,add_input_skip=True),
+                        heavy_decoder=heavy_decoder,add_input_skip=True,skip_attention=skip_attention),
                 nn.Embedding(src_vocab, emb_size),
                 nn.Embedding(tgt_vocab, emb_size),
                 Generator(hidden_size, tgt_vocab),
@@ -425,7 +432,8 @@ class Decoder(nn.Module):
     """A conditional RNN decoder with attention."""
     
     def __init__(self, emb_size, hidden_size, attention, num_layers=1, dropout=0.5,
-                 bridge=True, heavy_decoder=False, add_input_skip=False):
+                 bridge=True, heavy_decoder=False,
+                 add_input_skip=False, skip_attention=None):
         super(Decoder, self).__init__()
         
         self.hidden_size = hidden_size
@@ -433,6 +441,9 @@ class Decoder(nn.Module):
         self.attention = attention
         self.dropout = dropout
         self.add_input_skip = add_input_skip
+        
+        if add_input_skip:
+            self.skip_attention = skip_attention
         
         if heavy_decoder:
             # the idea is not to create a bottleneck in the representation
@@ -458,22 +469,27 @@ class Decoder(nn.Module):
                                               hidden_size, bias=False)
         
     def forward_step(self, prev_embed, encoder_hidden, src_mask, proj_key, hidden,
-                     skip=None):
+                     skip=None, skip_key=None):
         """Perform a single decoder step (1 word)"""
-
+        
         # compute context vector using attention mechanism
         query = hidden[-1].unsqueeze(1)  # [#layers, B, D] -> [B, 1, D]
         context, attn_probs = self.attention(
             query=query, proj_key=proj_key,
             value=encoder_hidden, mask=src_mask)
-
+        
+        if self.add_input_skip:
+            context_skip, attn_probs_skip = self.attention(
+                query=query, proj_key=skip_key,
+                value=skip, mask=src_mask)            
+        
         # update rnn hidden state
         rnn_input = torch.cat([prev_embed, context], dim=2)
         output, hidden = self.rnn(rnn_input, hidden)
         
         if self.add_input_skip:
             # also add input sequence embedding
-            pre_output = torch.cat([prev_embed, output, context, skip], dim=2)
+            pre_output = torch.cat([prev_embed, output, context, context_skip], dim=2)
         else:
             pre_output = torch.cat([prev_embed, output, context], dim=2)
         pre_output = self.dropout_layer(pre_output)
@@ -498,6 +514,10 @@ class Decoder(nn.Module):
         # this is only done for efficiency
         proj_key = self.attention.key_layer(encoder_hidden)
         
+        if self.add_input_skip:
+            # also for the skip connection
+            skip_key = self.skip_attention.key_layer(skip)
+        
         # here we store all intermediate hidden states and pre-output vectors
         decoder_states = []
         pre_output_vectors = []
@@ -507,7 +527,7 @@ class Decoder(nn.Module):
             prev_embed = trg_embed[:, i].unsqueeze(1)
             output, hidden, pre_output = self.forward_step(
                 prev_embed, encoder_hidden, src_mask, proj_key, hidden,
-                skip=skip)
+                skip=skip, skip_key=skip_key)
             decoder_states.append(output)
             pre_output_vectors.append(pre_output)
 
