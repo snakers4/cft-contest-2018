@@ -140,7 +140,7 @@ def run_epoch(data_iter, model, loss_compute,
             tokens += batch.ntokens
             total_sentences += batch_size
             
-            lm_losses.update(loss / batch.ntokens, batch_size)
+            lm_losses.update(loss.cpu() / batch.ntokens.cpu(), batch_size)
             clf_losses.update(clf_loss, batch_size)            
             
             if model.training and i % print_every == 0:
@@ -181,8 +181,8 @@ class SimpleLossCompute:
        
         loss = lm_loss + clf_loss        
         
-        loss.backward()
         if self.opt is not None:
+            loss.backward()
             self.opt.step()
             self.opt.optimizer.zero_grad()
         return lm_loss.cpu().data.item() * norm, clf_loss.cpu().data.item()
