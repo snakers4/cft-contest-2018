@@ -4,6 +4,7 @@ from tqdm import tqdm
 import torch.nn as nn
 import math, copy, time
 import torch.nn.functional as F
+from pytorch.ann_transformer import subsequent_mask
 
 class NoamOpt:
     "Optim wrapper that implements rate."
@@ -180,12 +181,12 @@ class SimpleLossCompute:
         x = self.generator(x)
         
         lm_loss = self.criterion(x.contiguous().view(-1, x.size(-1)), 
-                              y.contiguous().view(-1)) / norm
+                                 y.contiguous().view(-1)) / norm
         
         # normalize the clf loss by number of sentences
         clf_loss = self.clf_criterion(clf_logits, clf_gts)
         clf_loss = self.clf_coeff * clf_loss
-        
+       
         loss = lm_loss + clf_loss        
         
         loss.backward()

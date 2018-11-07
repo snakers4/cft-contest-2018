@@ -91,15 +91,18 @@ def correct_name_dist(phrase,
     words = phrase.split()
     correct_phrase = []
 
-    for word in words:
-        if word not in vocab:
-            similar_vocab = vocab_arr[(vocab_list_len>len(word)-len_diff-1)*(vocab_list_len<len(word)+len_diff+1)]
-            distances = [editdistance.eval(name,word) for name in similar_vocab]
-            idx = np.argsort(np.array(distances))[:5]
-            correct_phrase.append(similar_vocab[idx[0]])
-            # correct_phrase.append(get_close_matches(word, list(similar_vocab), n=1))
-        else:
-            correct_phrase.append(word)
+    try:
+        for word in words:
+            if word not in vocab:
+                similar_vocab = vocab_arr[(vocab_list_len>len(word)-len_diff-1)*(vocab_list_len<len(word)+len_diff+1)]
+                distances = [editdistance.eval(name,word) for name in similar_vocab]
+                idx = np.argsort(np.array(distances))[:5]
+                correct_phrase.append(similar_vocab[idx[0]])
+                # correct_phrase.append(get_close_matches(word, list(similar_vocab), n=1))
+            else:
+                correct_phrase.append(word)
+    except:
+        return phrase
     
     # print(' '.join(correct_phrase))
     

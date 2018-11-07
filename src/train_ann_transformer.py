@@ -25,7 +25,7 @@ from torchtext import data, datasets
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 # task specific custom modules
-from pytorch.ann_transformer import make_model
+from pytorch.ann_transformer import make_model,subsequent_mask
 from pytorch.transformer_train_utils import str2bool
 from pytorch.encoder_decoder_utils import (cleaner,
                                            tokenize,
@@ -33,7 +33,7 @@ from pytorch.encoder_decoder_utils import (cleaner,
                                            )
 from pytorch.ann_transformer_utils import (Batch,rebatch,
                                            SimpleLossCompute,
-                                           greedy_decode_batch,
+                                           greedy_decode,
                                            run_epoch,
                                            NoamOpt,
                                            get_std_opt,
@@ -346,7 +346,7 @@ def main():
     if not args.predict and not args.evaluate:
         print('Training starts...') 
         dev_perplexity,dev_clf_loss,preds,clf_preds = train(model,
-                                                            lr=args.lr,
+                                                            lr=1e-4,
                                                             num_epochs=args.epochs,
                                                             print_every=args.print_freq,
                                                             train_iter=train_iter,
@@ -373,9 +373,9 @@ def train(model,
     global BOS_WORD,EOS_WORD,BLANK_WORD
     
     criterion = LabelSmoothing(size=len(TRG_NAMES.vocab), padding_idx=PAD_INDEX, smoothing=0.1).to(DEVICE)
-    criterion_clf = nn.CrossEntropyLoss(reduce=False).to(DEVICE)
+    clf_criterion = nn.CrossEntropyLoss().to(DEVICE)
 
-    optim = get_std_opt()
+    optim = get_std_opt(model)
     
     """
     if args.load_optimizer_state:
@@ -390,9 +390,9 @@ def train(model,
         print('Training the model')
         model.train()
         
-        train_lm_loss, train_clf_loss = run_epoch((rebatch(pad_idx, b) for b in train_iter), 
+        train_lm_loss, train_clf_loss = run_epoch((rebatch(PAD_INDEX, b) for b in train_iter), 
                                                   model,
-                                                  SimpleLossCompute(mode.generator,
+                                                  SimpleLossCompute(model.generator,
                                                                     criterion,clf_criterion,
                                                                     optim,
                                                                     clf_coeff=args.clf_coeff),
