@@ -86,13 +86,6 @@ class Batch:
         tgt_mask = tgt_mask & subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data)
         return tgt_mask
 
-"""
-def rebatch(pad_idx, batch):
-    "Fix order in torchtext to match ours"
-    src, trg = batch.src.transpose(0, 1), batch.trg.transpose(0, 1)
-    return Batch(src, trg, pad_idx,
-                 batch.id,batch.clf)
-"""
 def rebatch(pad_idx, batch):
     "Fix order in torchtext to match ours"
     # src, trg = batch.src.transpose(0, 1), batch.trg.transpose(0, 1)
@@ -157,8 +150,7 @@ def run_epoch(data_iter, model, loss_compute,
                 #        (i, loss / batch.ntokens, tokens / elapsed))
 
                 pbar.set_postfix(loss=(lm_losses.avg,lm_losses.val),
-                                 clf_loss=(clf_losses.avg,clf_losses.val),
-                                 tkns_per_sec=tokens / elapsed)            
+                                 clf_loss=(clf_losses.avg,clf_losses.val))            
 
                 start = time.time()
                 tokens = 0
@@ -193,7 +185,7 @@ class SimpleLossCompute:
         if self.opt is not None:
             self.opt.step()
             self.opt.optimizer.zero_grad()
-        return loss.data.item() * norm, clf_loss.data.item()
+        return lm_loss.cpu().data.item() * norm, clf_loss.cpu().data.item()
     
 class AverageMeter(object):
     """Computes and stores the average and current value"""

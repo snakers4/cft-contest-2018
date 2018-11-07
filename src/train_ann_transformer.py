@@ -372,8 +372,8 @@ def train(model,
     global LOWER,PAD_INDEX,NAMES,TRG_NAMES
     global BOS_WORD,EOS_WORD,BLANK_WORD
     
-    criterion = LabelSmoothing(size=len(TRG_NAMES.vocab), padding_idx=PAD_INDEX, smoothing=0.1).to(DEVICE)
-    clf_criterion = nn.CrossEntropyLoss().to(DEVICE)
+    criterion = LabelSmoothing(size=len(TRG_NAMES.vocab), padding_idx=PAD_INDEX, smoothing=0.1)
+    clf_criterion = nn.CrossEntropyLoss()
 
     optim = get_std_opt(model)
     
