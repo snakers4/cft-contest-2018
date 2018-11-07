@@ -93,10 +93,18 @@ def rebatch(pad_idx, batch):
     return Batch(src, trg, pad_idx,
                  batch.id,batch.clf)
 
-def greedy_decode(model, src, src_mask, max_len, start_symbol):
+def greedy_decode(model, src, src_mask, max_len, start_symbol,
+                  return_logits=False):
     batch_size = src.size(0)
     memory = model.encode(src, src_mask)
-    print(memory.shape)
+    clf_logits = model.classifier(memory)
+    
+    if return_logits:
+        pred_classes = clf_logits
+    else:
+        _, pred_classes = torch.max(clf_logits, dim=1)    
+    pred_classes = pred_classes.data.cpu().numpy()
+    
     ys = torch.ones(batch_size, 1).fill_(start_symbol).type_as(src.data)
     for i in range(max_len-1):
         out = model.decode(memory, src_mask, 
@@ -108,7 +116,10 @@ def greedy_decode(model, src, src_mask, max_len, start_symbol):
         next_word = next_word.data[0]
         ys = torch.cat([ys, 
                         torch.ones(batch_size, 1).type_as(src.data).fill_(next_word)], dim=1)
-    return ys
+    
+    ys = ys.data.cpu().numpy()
+    
+    return ys,pred_classes
 
 def run_epoch(data_iter, model, loss_compute,
               print_every=50,num_batches=100,epoch_no=0):
@@ -140,7 +151,7 @@ def run_epoch(data_iter, model, loss_compute,
             tokens += batch.ntokens
             total_sentences += batch_size
             
-            lm_losses.update(loss.cpu() / batch.ntokens.cpu(), batch_size)
+            lm_losses.update(loss.cpu() / float(batch.ntokens.cpu()), batch_size)
             clf_losses.update(clf_loss, batch_size)            
             
             if model.training and i % print_every == 0:
