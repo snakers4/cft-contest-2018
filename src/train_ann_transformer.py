@@ -432,21 +432,19 @@ def train(model,
             score = (score1 + score2)/2
             
             print("Validation CLF Loss: %f" % dev_clf_loss)
-            print("Validation perplexity: %f" % dev_perplexity)
+            print("Validation LM Loss: %f" % dev_lm_loss)
             print("score {} / Score 1 {} / Score 2 {}".format(score,score1,score2))
             
             if args.tensorboard:
                 writer.add_scalars('clf_losses', {'dev_clf_loss': dev_clf_loss,
                                                   'train_clf_loss': train_clf_loss},epoch+1) 
 
-                writer.add_scalars('lm_losses', {'dev_perplexity': dev_perplexity,
-                                                 'train_perplexity': train_perplexity},epoch+1)            
+                writer.add_scalars('lm_losses', {'dev_lm_loss': dev_lm_loss,
+                                                 'train_lm_loss': train_lm_loss},epoch+1)            
 
                 writer.add_scalars('scores', {'score1': score1,
                                               'score2': score2,
                                               'score': score,},epoch+1)
-
-            scheduler.step(score)
 
             is_best = score > best_met
             best_acc1 = max(score, best_met)
@@ -455,7 +453,6 @@ def train(model,
             save_checkpoint({
                     'epoch': epoch + 1,
                     'state_dict': model.state_dict(),
-                    'optimizer': optim.state_dict(),                
                     'best_met': best_met,
                     },
                     is_best,
@@ -488,6 +485,8 @@ def predict(example_iter, model, max_len=100,
         src_eos_index = None
         trg_sos_index = 1
         trg_eos_index = None
+        
+    print('src_eos_index / trg_sos_index / trg_eos_index: {} / {} / {}'.format(src_eos_index,trg_sos_index,trg_eos_index))
 
     preds = []
     clf_preds = []

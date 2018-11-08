@@ -94,8 +94,15 @@ def rebatch(pad_idx, batch):
                  batch.id,batch.clf)
 
 def greedy_decode(model, src, src_mask, max_len, start_symbol,
-                  return_logits=False):
+                  return_logits=False, end_symbol=None):
+    
+    global DEVICE
     batch_size = src.size(0)
+    
+    # early stopping 
+    break_mask = torch.zeros(batch_size).byte().to(DEVICE)
+    prev_y_eos = torch.ones(batch_size).fill_(end_symbol).long().to(DEVICE)
+    
     memory = model.encode(src, src_mask)
     clf_logits = model.classifier(memory)
     
@@ -106,6 +113,7 @@ def greedy_decode(model, src, src_mask, max_len, start_symbol,
     pred_classes = pred_classes.data.cpu().numpy()
     
     ys = torch.ones(batch_size, 1).fill_(start_symbol).type_as(src.data)
+    
     for i in range(max_len-1):
         out = model.decode(memory, src_mask, 
                            ys, 
@@ -113,9 +121,16 @@ def greedy_decode(model, src, src_mask, max_len, start_symbol,
         # prob = model.generator(out[:, -1])
         prob = model.generator(out[:, -1])
         _, next_word = torch.max(prob, dim = 1)
-        next_word = next_word.data[0]
+
         ys = torch.cat([ys, 
-                        torch.ones(batch_size, 1).type_as(src.data).fill_(next_word)], dim=1)
+                        next_word.unsqueeze(dim=1)], dim=1)        
+        
+        mask = (next_word == prev_y_eos)
+        break_mask += mask        
+        
+        if (break_mask>=1).sum()==batch_size:
+            # print('Breaking out of cycle early')
+            break            
     
     ys = ys.data.cpu().numpy()
     
