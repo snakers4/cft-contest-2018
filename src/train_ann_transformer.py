@@ -126,7 +126,7 @@ def main():
     NAMES = data.Field(tokenize=tokenize,
                        batch_first=True,
                        lower=LOWER,
-                       include_lengths=True,
+                       include_lengths=False,
                        pad_token=BLANK_WORD,
                        init_token=None,
                        eos_token=EOS_WORD)
@@ -134,7 +134,7 @@ def main():
     TRG_NAMES = data.Field(tokenize=tokenize, 
                            batch_first=True,
                            lower=LOWER,
-                           include_lengths=True,
+                           include_lengths=False,
                            pad_token=BLANK_WORD,
                            init_token=BOS_WORD,
                            eos_token=EOS_WORD)
@@ -511,10 +511,10 @@ def predict(example_iter, model, max_len=100,
                     first_eos = np.where(pred==trg_eos_index)[0]
                     if len(first_eos) > 0:
                         # produce sentences
-                        preds.append("".join(lookup_words(pred[:first_eos[0]],
+                        preds.append("".join(lookup_words(pred[1:first_eos[0]],
                                          vocab=TRG_NAMES.vocab)))
                     else:
-                        preds.append("".join(lookup_words(pred[:],
+                        preds.append("".join(lookup_words(pred[1:],
                                                           vocab=TRG_NAMES.vocab)))                            
             pbar.update(1)
     return preds,clf_preds            

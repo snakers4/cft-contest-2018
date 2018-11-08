@@ -89,7 +89,7 @@ class Batch:
 def rebatch(pad_idx, batch):
     "Fix order in torchtext to match ours"
     # src, trg = batch.src.transpose(0, 1), batch.trg.transpose(0, 1)
-    src, trg = batch.src[0], batch.trg[0]
+    src, trg = batch.src, batch.trg
     return Batch(src, trg, pad_idx,
                  batch.id,batch.clf)
 
