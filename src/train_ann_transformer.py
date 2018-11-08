@@ -498,7 +498,7 @@ def predict(example_iter, model, max_len=100,
             
             output, pred_classes = greedy_decode(
                 model, batch.src, batch.src_mask,
-                max_len,trg_sos_index,device=DEVICE
+                max_len,trg_sos_index,device=DEVICE,end_symbol=trg_eos_index
             )
 
             clf_preds.extend(list(pred_classes))
