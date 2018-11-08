@@ -371,6 +371,7 @@ def train(model,
     global best_met
     global LOWER,PAD_INDEX,NAMES,TRG_NAMES
     global BOS_WORD,EOS_WORD,BLANK_WORD
+    global DEVICE
     
     criterion = LabelSmoothing(size=len(TRG_NAMES.vocab), padding_idx=PAD_INDEX, smoothing=0.1)
     clf_criterion = nn.CrossEntropyLoss()
@@ -473,6 +474,7 @@ def predict(example_iter, model, max_len=100,
     global best_met
     global LOWER,PAD_INDEX,NAMES,TRG_NAMES
     global BOS_WORD,EOS_WORD,BLANK_WORD
+    global DEVICE
     
     model.eval()
     count = 0
@@ -496,7 +498,7 @@ def predict(example_iter, model, max_len=100,
             
             output, pred_classes = greedy_decode(
                 model, batch.src, batch.src_mask,
-                max_len,trg_sos_index
+                max_len,trg_sos_index,device=DEVICE
             )
 
             clf_preds.extend(list(pred_classes))

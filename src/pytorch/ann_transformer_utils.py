@@ -94,14 +94,13 @@ def rebatch(pad_idx, batch):
                  batch.id,batch.clf)
 
 def greedy_decode(model, src, src_mask, max_len, start_symbol,
-                  return_logits=False, end_symbol=None):
+                  return_logits=False, end_symbol=None, device=None):
     
-    global DEVICE
     batch_size = src.size(0)
     
     # early stopping 
-    break_mask = torch.zeros(batch_size).byte().to(DEVICE)
-    prev_y_eos = torch.ones(batch_size).fill_(end_symbol).long().to(DEVICE)
+    break_mask = torch.zeros(batch_size).byte().to(device)
+    prev_y_eos = torch.ones(batch_size).fill_(end_symbol).long().to(device)
     
     memory = model.encode(src, src_mask)
     clf_logits = model.classifier(memory)
