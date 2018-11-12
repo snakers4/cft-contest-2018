@@ -105,16 +105,45 @@ Dima
 
 ## **Key milestones in achieveing our result**
 
-Original lm transformer
+
+Model | Overall score | Plain heuristic boost | Comment
+-- | -- | -- | --
+OpenAI transformer | <50% | NA | we abandoned this idea (`*`)
+Baseline | <80% | NA |
+Baseline naïve keras seq2seq | 88% | NA | it took Savva 3 hours to build this
+BiGRU baseline seq2seq | 82-85% | NA | following annotated encoder decoder
+Best transformer seq2seq | 85%+ | NA | too long to train `(**)`
+BiGRU seq2seq + tuning | 89-90% | 1% | `(***)`
+BiGRU seq2seq + tuning + countries | 89-90% | 1% | no improvement
+BiGRU seq2seq + tuning + heavy decoder | ~91% | 1% | minor improvement
+BiGRU seq2seq + tuning + heavy decoder +   skip | ~91% | 1% | minor or no improvement
+BiGRU seq2seq + tuning + heavy decoder +   WRONG train / psedo augs | ~91.5% | 0.5%+ |
+BiGRU seq2seq + tuning + heavy decoder +   CORRECT train / psedo augs | >92.5% | 0.5%+ | `(****)`
+
+- `(*)` Most likely we just did not invest enough time into this, but the target of the base pipeline base different, so we abandoned the idea
+- `(**)` Whereas the fattest reasonable BiGRU model trained for 15-20 hours, this would train for at least a week on one GPU to achieve similar result;
+- `(***)` LR decay mostly, MOAR layers!;
+- `(****)` Two time we made erros when generating augmented data. At first I mixed 2 columns (source and target) in 50% of cases - and the model trained a bit better at first. Then I forgot to change target labels when augmenting the data
+
+
+## **End to end metric curves**
+
+**Original lm transformer**
 ![](https://pics.spark-in.me/upload/32975595ab1ae7086183c9835536d6b8.jpg)
 
+**Original encoder decoder seq2seq**
 ![](https://pics.spark-in.me/upload/647d3349c8f4e0d31572b1a31776ff7e.jpg)
+
+**Tuned encoder decoder seq2seq**
 ![](https://pics.spark-in.me/upload/70fc52606e05cb457cb5d928ef4b85e6.jpg)
+
+**Adding WRONG augmentations**
 ![](https://pics.spark-in.me/upload/5d37668131bf599590753ff8467a55b1.jpg)
 
+**Playing with lower lr**
+![](https://pics.spark-in.me/upload/74d6fbc2815244e78c06f37f14682ed2.jpg)
 
-![](https://pics.spark-in.me/upload/5d37668131bf599590753ff8467a55b1.jpg)
-
+**Adding CORRECT augmentations**
 ![](https://pics.spark-in.me/upload/fbeafcc4168866fd86809e71e316e319.jpg)
 
 
@@ -122,9 +151,19 @@ Original lm transformer
 
 ### **Heuristic that worked**
 Savva, AV
+
+After building the first seq2seq model we noticed that sometimes the model predicted class 1 (with errors), but failed to change the phrase. We used this as a heuristic, that gave us from 0.5% boost to 1% boost, depending on the quality of the model (worse for strong models).
+
 ### **Heuristics that did not work, or that we did not explore**
-Savva
+
+At some moment of time we noticed, that the network is several times more likely to make errors with the words it "knows" compared to "new" words (names / surnames / patronyms). It meant that the network generalized well, but nevertheless we tried applying an obvious heuristic to test, in essence similar to pseudo-labelling.
+
+Obviously we tried using dictionary heuristic, i.e. checking whether the predicted words are present in the vocabulary of names. It gave a significant boost on validation, but failed to provide reasonable boost on test (most likely because there are rare names that are predicted wrong and / or are not present in train). Obviosuly we tried adding predicted "correct" test names, but that did not help.
+
 ![](https://pics.spark-in.me/upload/63bb287b0d3162de741cb07e687492d6.jpg)
+Train vs. test word dictionary overlap
+
+Savva
 
 ## **Improving the annotated encoder-decoder and the annotated transformer**
 
@@ -140,7 +179,6 @@ As you may know
 ### **KLD loss?**
 
 ## **Kind words about organization and comparison to Kaggle**
-
 
 ## **Competition pulse**
 
@@ -178,6 +216,6 @@ But it is victors, who write history.
 
 ## **References**
 
-- Annotated encoder decoder and annotated transformer (older PyTorch);
+- Annotated [encoder decoder](https://bastings.github.io/annotated_encoder_decoder/) and [annotated transformer](http://nlp.seas.harvard.edu/2018/04/03/attention.html) (older PyTorch);
 - OpenAI transformer
 - Torch text data pipeline [explained](http://mlexplained.com/2018/02/08/a-comprehensive-tutorial-to-torchtext/);
