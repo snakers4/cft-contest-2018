@@ -226,7 +226,9 @@ def main():
             del checkpoint
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))    
-    
+    else:
+        args.start_epoch = 0
+        
     criterion = nn.CrossEntropyLoss(reduce=False).to(DEVICE)
 
     if args.tensorboard:

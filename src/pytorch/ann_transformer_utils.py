@@ -174,7 +174,7 @@ def run_epoch(data_iter, model, loss_compute,
                 # print("Epoch Step: %d Loss: %f Tokens per Sec: %f" %
                 #        (i, loss / batch.ntokens, tokens / elapsed))
 
-                pbar.set_postfix(loss=(lm_losses.avg,lm_losses.val),
+                pbar.set_postfix(loss=(float(lm_losses.avg),float(lm_losses.val)),
                                  clf_loss=(clf_losses.avg,clf_losses.val))            
 
                 start = time.time()
