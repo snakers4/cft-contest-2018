@@ -11,7 +11,7 @@ It was a long, difficult, nervous and surprisingly rewarding journey for our tea
 
 To sum all the experience in one line - **the journey is more important than the destination**. This competition taught us a lot about being persistent, trying new thigs, fallind down and standing up again.
 
-I personally comlpiled / optimized 3 or 4 pipelines for this task, until I could build the best. Also, as usual, we found a crucial error one day before the finish line.
+I personally compiled / optimized 3 or 4 pipelines for this task, until I could build the best one. Also, as usual, we found a crucial error one day before the finish line xD
 
 ## **TLDR**
 
@@ -22,26 +22,27 @@ The core of the task - was input classification (**correct / needs to be correct
 
 The domain was - names of individuals from the countries of the CIS:
 - Mostly Russia, Moldova, Uzbekistan, Georgia, Tadzikistan, Kazakhstan, Ukraine, etc;
-- Names usually consist of 3 parts (name, surname, patronym). Sometimes in certain republics patronyms contain and additional suffix added as a fourth word;
-- There were 2+ alphabets with a total around 70+ characters;
+- Names usually consist of 3 parts (name, surname, patronym) - `Иванов Иван Иванович`. Sometimes in certain republics patronyms contain and additional suffix added as a fourth word (`ОГЛЫ`, same as `вич` suffix in Russian, but a separate word);
+- There were 2+ alphabets with a total around 70+ characters + a lot of noise in the data;
 
 **Models that worked best**
-- Tuned sequence-to-sequence bidirectional GRU (see details below) - `92.5%` wo heuristics, `93%` with heuristics;
-- Proper sequence-to-sequence inference loop;
+- Sequence-to-sequence:
+  - Tuned sequence-to-sequence bidirectional GRU (see details below) - `92.5%` wo heuristics, `93%` with heuristics, `93%+` in ensemble;
+  - Proper sequence-to-sequence inference loop;
 - Also a more plain model in keras where input is essentially mapped to output via TimeDistributedDense layer worked well;
 - Strongest naive heuristic - if the output of seq2seq ingefence loop is the same as input - then the input is correct;
 
 **Key takeaways:**
-- Seq2seq transformer took **much more time to train** and we failed to make it works the same as more traditional models;
-- Our main competitor (with ~200 submissions) did not use Deep Learning at all - he essentially reverse engineereed the augmentation pipeline of the hosts - which is tough work, but does not scale to other domains;
+- Seq2seq transformer took **much more time to train** and we failed to make it works the same as more traditional models. Obciously we lacked experience with it, but this is the fourth time I notice real  people mention that transformer is not for "real" people (i.e. for Google with 512 TPUs);
+- Our main competitor (with ~200 submissions) did not use Deep Learning at all - he **essentially reverse engineereed the augmentation pipeline of the hosts** - which is tough work, but does not scale to other domains;
 - Batch seq2seq predictions are key to fast inference;
+- Beam search, though being a tough gem to implement, boosted the score insignificantly (obvious culprit - small dictionary);
 
 ## **Code release**
 
-We will not bother replicating the whole training process
+We will not bother replicating the whole training process, since there were a lot of fine-tuning steps, but overall these bits will be reusable for you:
 
-- Dockerfile in case you run into problems in your environment;
-- When the competition started
+- Dockerfile in case you run into problems in your environment (when the image was build PyTorch 4.0 or 4.1 was a major version, target it, or you will have to make code compatible);
 - Keras model:
   - Link;
 - PyTorch BiLSTM seq2seq:
@@ -50,11 +51,13 @@ We will not bother replicating the whole training process
   - Best model train pipeline;
   - Typical launch command
 - Text augmentations;
+- Post-processing;
+- Naive post-processing for single model;
 
 
 ## **Domain description**
 
-One image is better than a thousand words.
+One illustration is better than a thousand words.
 Please also note - in train + test there were ~2000 counties, i.e. country input was also very noisy.
 
 id | fullname | country | target | fullname_true
@@ -82,10 +85,10 @@ id | fullname | country | target | fullname_true
 
 The hosts of the competition also shared a strong [baseline](https://github.com/datasouls/cft2018-fiotypos/blob/master/baseline/baseline.ipynb):
 - A linear regression classifier on 1m n-grams;
-- Plain usage of library
+- Plain usage of 3rd party library to correct misprints;
 
 ![](https://pics.spark-in.me/upload/f8c096815176bff3b93a2c8741fec176.jpg)
-The distribution of the number of errors
+_The distribution of the number of errors_
 
 
 
@@ -136,19 +139,45 @@ As you may know
 
 ### **KLD loss?**
 
-
 ## **Kind words about organization and comparison to Kaggle**
 
 
 ## **Competition pulse**
+
+At first Savva dominated the leaderboard (**LB**) with his 88% score for a long time.
+This is the moment when competition caugh up. My pipelines mostly were failures at this moment.
+
 ![](https://pics.spark-in.me/upload/3193fa61d2f05a14bbc048c504e6964b.jpg)
+
+Then I finally manage to make the annotated encoder decoder work and we were trolling the LB again for some time (probably a week or so).
+
 ![](https://pics.spark-in.me/upload/75d5f0f8644fb932a423602955b3d8ed.jpg)
+
+We did not really bother to stack our model and / or show our best results, but at this point it was worrying, because our single best model + heuristics did not really have a lot of breathing room. At this point we could achieve ~`92%`, but we waited and tried different models and heuristics.
+
 ![](https://pics.spark-in.me/upload/aeb7ee6daecd667de8c6170bad6cfd0e.jpg)
+
+This was pre-final result sometime during the last day. Notice thousandvoices is at the top. We had to ensemble our models quite a bit here. Also I found a bug in my augmentation pipeline 1 day before the competition end, and our single best model started learning quite quickly and achieved ~`92.5%` w/o heuristics and ~`93%` with a plain heuristic.
+
+But this did not transfer well to our ensemble. 1% gain in the best model translated into `0.2-0.3%` for reasons explained above.
+
+![](https://pics.spark-in.me/upload/d629b2eae0b0886b3217f02b13d68ebd.jpg)
+
+It was quite a heated battle during the last minutes (I wonder why people do not sleep at 11:59 PM on Sunday???)
+
+![](https://pics.spark-in.me/upload/92f69dbdbc696dbc9d74b719dd7a4f42.jpg)
+
+And this is the final private leaderboard. Notice that we kept our ground and thousandvoices likely:
+- Either somehow overfitted (or maybe he used some leaks, who knows);
+- Or just forgot to choose his final submission, who knows;
+
+But it is victors, who write history.
+
 ![](https://pics.spark-in.me/upload/f90665508581c16155d3cffb65a6fb95.jpg)
 
 
 ## **References**
 
-- Annotated encoder decoder and transformer
+- Annotated encoder decoder and annotated transformer (older PyTorch);
 - OpenAI transformer
-- Torch text data pipeline explained
+- Torch text data pipeline [explained](http://mlexplained.com/2018/02/08/a-comprehensive-tutorial-to-torchtext/);
