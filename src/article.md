@@ -133,7 +133,17 @@ Please refer to these **amazing articles** for more nuts and bolts of the models
 - Running augmentations on the fly - I believe you can extend this [line](https://github.com/pytorch/text/blob/master/torchtext/data/iterator.py#L257) in torchtext to do so, but I postponed it a bit, and then just had no time to do that. But that may speed up the convergence 3-10x from my experience;
 
 ## **Text data augmentation**
-Dima
+After some reverse engineering process (by the way based on the word ngrams), it turned out, that organizers use pretty simple typos generation methods. There are 5 main types:
+- __insert__, the most dominant type (_~50%~_ of all cases). Just takes a random letter in a word and inserts a new letter before or after it. A new letter is a random closest (on a keybord) letter to the chosen one, for example - letters __W__, __S__ or __A__ if __Q__ is chosen. __IVAN__ - __ICVAN__
+- __change__, _~30%_, just changes a random letter in a word into random closest to it on a keybord (like in __insert__ case). __IVAN__ - __IVQN__
+- __swap__ positions of two nearest random letters, _~5%_. __IVAN__ - __IAVN__
+- __delete space__ between two words, _~7.5%_
+- __delete letter__ (completely random _~7.5%_), __IVAN__ - __VAN__
+
+Each query with typos contains a combination of one (_93%_ of all cases), two (_6%_) or three (_~1%_) mistakes listed above.
+
+So we managed to write our own funcion for generating an additional dataset and use it alongside the original one for training.
+
 
 ![](https://pics.spark-in.me/upload/ed966651a0e7a34702fa0510089c40bc.jpg)
 
