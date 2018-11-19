@@ -222,7 +222,8 @@ As it often happens during competitions, at some point closely to the end you ju
 
 We used hold-out validation data to find optimal way of ensembling and its parameters. For the first task of classification we used kind of geometrical mean of predicted probabilities from variety diverse models. For the second taks of name correction we implemented simple majority voting mechanism that was applied for each of the token of predicted names. After each step heuristics described above were used as well.
 
-This quite simple yet efficient ensemble gave us final ~0.003% boost and 1st place.
+This quite simple yet efficient ensemble gave us final ~0.003% boost and 1st place. We selected it and best single model as our two final submissions:
+![](https://pics.spark-in.me/upload/c83b820499d1080452a2160fb7c9d685.png)
 
 ## **Improving the annotated encoder-decoder and the annotated transformer**
 
