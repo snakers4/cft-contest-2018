@@ -6,7 +6,7 @@ _This is the first time we managed to win (i.e. 1st place) an ML competition_
 
 A small philosophic preamble.
 
-We participated as Profi.ru team (yours truly + Dmitry Voronin helped a bit) + Savva Kolbachev, my old time pal from many competitions, also a specialist in NLP.
+We participated as [Profi.ru](https://profi.ru/) team (yours truly + Dmitry Voronin helped a bit) and Sava Kalbachou ([Lucidworks](https://lucidworks.com/)), my old time pal from many competitions, also a specialist in NLP.
 It was a long, difficult, nervous and surprisingly rewarding journey for our team.
 
 To sum all the experience in one line - **the journey is more important than the destination**. This competition taught us a lot about being persistent, trying new things, falling down and standing up again.
@@ -18,18 +18,18 @@ I personally compiled / optimized 3 or 4 pipelines for this task, until I could 
 ![](https://pics.spark-in.me/upload/bad1d7a0c9a0a3bc2289375f04f660bb.jpg)
 We managed to apply some of the current state-of-the-art sequence-to-sequence models to a real `in the wild` [problem](https://datasouls.com/c/cft-contest/description#) in a challenging domain in a mixed multi-task / auto-encoder setting.
 
-The core of the task - was input classification (**correct / needs to be corrected / random non-relevant trash**) and input correction.
+The core of the task was - input classification (**correct / needs to be corrected / random non-relevant trash**) and input correction.
 
 The domain was - names of individuals from the countries of the CIS:
 - Mostly Russia, Moldova, Uzbekistan, Georgia, Tadzhikistan, Kazakhstan, Ukraine, etc;
-- Names usually consist of 3 parts (name, surname, patronym) - `Иванов Иван Иванович`. Sometimes in certain republics patronyms contain and additional suffix added as a fourth word (`ОГЛЫ`, same as `вич` suffix in Russian, but a separate word);
+- Names usually consist of 3 parts (name, surname, patronym) - `Иванов Иван Иванович`. Sometimes in certain republics patronyms have additional suffix added as a fourth word (`ОГЛЫ`, same as `вич` suffix in Russian, but a separate word);
 - There were 2+ alphabets with a total around 70+ characters + a lot of noise in the data;
 
 **Models that worked best**
 - Sequence-to-sequence:
   - Tuned sequence-to-sequence bidirectional GRU (see details below) - `92.5%` wo heuristics, `93%` with heuristics, `93%+` in ensemble;
   - Proper sequence-to-sequence inference loop;
-- Also a more plain model in keras where input is essentially mapped to output via TimeDistributedDense layer worked well - with a top score of `88%`;
+- Also a simpler model in Keras without bottleneck and with Conv1D output layer worked well - with a top score of `88-89%`;
 - Strongest naïve heuristic - if the output of seq2seq inference loop is the same as input - then the input is correct;
 
 **Key takeaways:**
@@ -45,7 +45,14 @@ We will not bother replicating the whole training process, since there were a lo
 - [Preparing](https://github.com/snakers4/cft-contest-2018/blob/master/src/preprocessing_av.ipynb) the competition dataset (see the first chapter of the notebook);
 - [Dockerfile](https://github.com/snakers4/cft-contest-2018/blob/master/Dockerfile) in case you run into problems in your environment (when the image was build PyTorch 4.0 or 4.1 was a major version, target it, or you will have to make code compatible);
 - Keras model:
-  - Link;
+  - Some [preprocessing](https://github.com/snakers4/cft-contest-2018/blob/master/savva_final_solution/preprocessing.py);
+  - Best model train [utils](https://github.com/snakers4/cft-contest-2018/blob/master/savva_final_solution/local_utils.py);
+  - Best model train [pipeline](https://github.com/snakers4/cft-contest-2018/blob/master/savva_final_solution/spell_simple_seq2seq_train_predict.py);
+  - Typical launch commands:
+```
+	python preprocessing.py
+	python spell_simple_seq2seq_train_predict.py
+```
 - PyTorch BiLSTM seq2seq:
   - Best model train [utils](https://github.com/snakers4/cft-contest-2018/blob/master/src/pytorch/encoder_decoder_utils.py);
   - Best model [classes](https://github.com/snakers4/cft-contest-2018/blob/master/src/pytorch/encoder_decoder.py);
@@ -72,7 +79,7 @@ CUDA_VISIBLE_DEVICES=0 python3 train_encoder_decoder_predict.py \
 ## **Domain description**
 
 One illustration is better than a thousand words.
-Please also note - in train + test there were ~2000 counties, i.e. country input was also very noisy.
+Please also note - in train + test there were ~2000 countries, i.e. country input was also very noisy.
 
 id | fullname | country | target | fullname_true
 -- | -- | -- | -- | --
@@ -126,10 +133,11 @@ Please refer to these **amazing articles** for more nuts and bolts of the models
 
 ## **Ideas / solutions / models that did not work or we did not try**
 
+- [BPE / Sentencepiece](https://github.com/google/sentencepiece) - we tried using several vocabularies (500, 1500, 5000 tokens size etc.) obtained in unsupervised fasion via Sentencepiece. But it didn't really help model to converge faster and results were worse than we expected.
 - [Beam search](https://github.com/snakers4/cft-contest-2018/blob/master/src/pytorch/encoder_decoder_utils.py#L353) - most likely because of model confidence and small vocabulary. It boosted the score a bit, but did not provide a lot of value. It was a tough nut to crack, but I was dissapointed it did not work as much as we expected;
 - Transformer model - when I adopted and optimized the annotated transformer [pipeline](http://nlp.seas.harvard.edu/2018/04/03/attention.html) it worked, but failed to converge within meaningful time;
-- LM assisted classifier from Open AI transformer experiments - it failed to converge at all, most likely because it lacked a proper seq2seq inference loop, it was a low hanging fruit for me (I just had the this pipeline ready, while Savva boasted his initial 88% pipeline);
-- Multi-GPU / cluster / distributed training;
+- LM assisted classifier from Open AI transformer experiments - it failed to converge at all, most likely because it lacked a proper seq2seq inference loop, it was a low hanging fruit for me (I just had the this pipeline ready, while Sava boasted his initial 88% pipeline);
+- Multi-GPU / cluster / distributed training - didn't try it;
 - Running augmentations on the fly - I believe you can extend this [line](https://github.com/pytorch/text/blob/master/torchtext/data/iterator.py#L257) in torchtext to do so, but I postponed it a bit, and then just had no time to do that. But that may speed up the convergence 3-10x from my experience;
 
 ## **Text data augmentation**
@@ -154,7 +162,7 @@ Model | Overall score | Plain heuristic boost | Comment
 -- | -- | -- | --
 OpenAI transformer | <50% | NA | we abandoned this idea (`*`)
 Baseline | <80% | NA |
-Baseline naïve keras seq2seq | 88% | NA | it took Savva 3 hours to build this
+Baseline naïve Keras seq2seq | 88-89% | NA | it took Sava ~3 hours to build this
 BiGRU baseline seq2seq | 82-85% | NA | following annotated encoder decoder
 Best transformer seq2seq | 85%+ | NA | too long to train `(**)`
 BiGRU seq2seq + tuning | 89-90% | 1% | `(***)`
@@ -165,7 +173,7 @@ BiGRU seq2seq + tuning + heavy decoder +   WRONG train / psedo augs | ~91.5% | 0
 BiGRU seq2seq + tuning + heavy decoder +   CORRECT train / psedo augs | >92.5% | 0.5%+ | `(****)`
 
 - `(*)` Most likely we just did not invest enough time into this, but the target of the base pipeline base different, so we abandoned the idea;
-- `(**)` Whereas the fattest reasonable BiGRU model trained for 15-20 hours, this would train for at least a week on one GPU to achieve similar result;
+- `(**)` Whereas the biggest reasonable BiGRU model trained for 15-20 hours, this would train for at least a week on one GPU to achieve similar result;
 - `(***)` LR decay mostly, MOAR layers!;
 - `(****)` Two time we made errors when generating augmented data. At first I mixed 2 columns (source and target) in 50% of cases - and the model trained a bit better at first. Then I forgot to change target labels when augmenting the data
 
@@ -194,9 +202,10 @@ BiGRU seq2seq + tuning + heavy decoder +   CORRECT train / psedo augs | >92.5% |
 ## **Post-processing heuristics**
 
 ### **Heuristic that worked**
-Savva, AV
 
-After building the first seq2seq model we noticed that sometimes the model predicted class 1 (with errors), but failed to change the phrase. We used this as a heuristic, that gave us from 0.5% boost to 1% boost, depending on the quality of the model (worse for strong models).
+After building the first seq2seq model we noticed that sometimes model predicts class 0 (phrase doesn't contains error), but predicted phrase is different from original one. We used this as a heuristic to change predicted class from 0 to 1 (phrase contains error), that gave us 0.5-1.5% boost, depending on the quality of the model (less for strong models).
+
+Another heuristic was in changing predicted class/phrase to predictions from quite different model (like Keras one) in cases when we are sure that there is a mistake in predictions (model predicts class 1, but predicted phrase is equal to original phrase).
 
 ### **Heuristics that did not work, or that we did not explore**
 
@@ -207,7 +216,13 @@ Obviously we tried using dictionary heuristic, i.e. checking whether the predict
 ![](https://pics.spark-in.me/upload/63bb287b0d3162de741cb07e687492d6.jpg)
 Train vs. test word dictionary overlap
 
-Savva
+## **Ensembling models**
+
+As it often happens during competitions, at some point closely to the end you just have to do some stacking/ensembling to continue compete and stay at the top of LB. This contest wasn't an exception.
+
+We used hold-out validation data to find optimal way of ensembling and its parameters. For the first task of classification we used kind of geometrical mean of predicted probabilities from variety diverse models. For the second taks of name correction we implemented simple majority voting mechanism that was applied for each of the token of predicted names. After each step heuristics described above were used as well.
+
+This quite simple yet efficient ensemble gave us final ~0.003% boost and 1st place.
 
 ## **Improving the annotated encoder-decoder and the annotated transformer**
 
@@ -225,7 +240,7 @@ But as everything in life, they are not perfect.
 - Predictions in both of them are handled with batch-size of one. This is not ideal when you run a lot of end-to-end experiments;
 - Annotated encoder decoder boasts loss weighting, but it is not explained that when pairing this with secondary objectives (like in our case) - you have to be extra careful with weighting both components of the loss to avoid over / underfitting on one task;
 - While torchtext is awesome for the purpose it was build (to accelerate NMT experiments) - for applied competition NLP pipelines - it is a bit slow and bulky and seed parameters are non intuitive. Probably I should have solved caching a bit better, but I opted for the simplest solution with CSV files I explain below;
-- I fully understand that distributed / data parallel routines in PyTorch a bit experimental and high maintenance, but ofc annotated transformers multi GPU loss compute function broke in `PyToch 0.4+`. I decided not to fix this, but probably I should have, expecially for transformer;
+- I fully understand that distributed / data parallel routines in PyTorch is a bit experimental and in high maintenance, but ofc annotated transformers multi GPU loss compute function broke in `PyToch 0.4+`. I decided not to fix this, but probably I should have, expecially for transformer;
 
 ### **Batch predictions and beam search**
 
@@ -243,66 +258,66 @@ As you may be aware, this slows down end-to-end validation 10x. So, I have writt
 ### **Model flavours**
 
 At some point in time I noticed that there are essentially 2 bottle-necks in our best model:
-- The flow between encoder and decoder is bottle-necked by the fact that encoder is bidirectional, and decoder is not. So simply speaking I solved this by making my decoder [2 times fatter](https://github.com/snakers4/cft-contest-2018/blob/master/src/pytorch/encoder_decoder.py#L22) (and it helped my model to converge);
-- I also experimented with adding [country embeddings](https://github.com/snakers4/cft-contest-2018/blob/master/src/pytorch/encoder_decoder.py#L64) and adding a [skip connection](https://github.com/snakers4/cft-contest-2018/blob/master/src/pytorch/encoder_decoder.py#L36) and one more attention layer in essense similar to copy attention from abstraction models - both these ideas did not work for me;
-- I also played with essentially [dropping](https://github.com/snakers4/cft-contest-2018/blob/master/src/pytorch/encoder_decoder.py#L53) embeddings at all (char level model), with poor results;
+- The flow between encoder and decoder is bottle-necked by the fact that encoder is bidirectional, and decoder is not. So simply speaking I solved this by making my decoder [2 times bigger](https://github.com/snakers4/cft-contest-2018/blob/master/src/pytorch/encoder_decoder.py#L22) (and it helped my model to converge);
+- I also experimented with adding [country embeddings](https://github.com/snakers4/cft-contest-2018/blob/master/src/pytorch/encoder_decoder.py#L64) and adding a [skip connection](https://github.com/snakers4/cft-contest-2018/blob/master/src/pytorch/encoder_decoder.py#L36) and one more attention layer in essense similar to copy attention from abstraction models - these ideas did not work for me;
+- I also played with essentially [dropping](https://github.com/snakers4/cft-contest-2018/blob/master/src/pytorch/encoder_decoder.py#L53) embeddings at all (char level model), with poor results; On the other hand, Keras models worked reasonably better at char level than using embeddings.
 
 Notably, best models were quite heavy, heavy decoder also adding quite a lot of time to epoch.
 
 ### **Loss weighting is crucial!**
 
-I did not run ablation tests for this (I had a lot of experience failing in object detection with 2-3 losses, though) - but I assumed that since loss is essentially applied `n_token` times for language modelling target and then normalized by the number or tokens, to achieve best results the classification loss shoulkd be similarly [sized](https://github.com/snakers4/cft-contest-2018/blob/master/src/pytorch/encoder_decoder_utils.py#L89). I achieved this simply by using the most convenient loss layer in PyTorch (yeah, I forgot to divide this loss by batch-size, but this turned out to be not so cricial, I guess).
+I did not run ablation tests for this (I had a lot of experience failing in object detection with 2-3 losses, though) - but I assumed that since loss is essentially applied `n_token` times for language modelling target and then normalized by the number or tokens, to achieve best results the classification loss should be similary [sized](https://github.com/snakers4/cft-contest-2018/blob/master/src/pytorch/encoder_decoder_utils.py#L89). I achieved this simply by using the most convenient loss layer in PyTorch (yeah, I forgot to divide this loss by batch-size, but this turned out to be not so cricial, I guess).
 
 ### **KLD loss?**
 
-A neat from annotated transformer idea I did not explore - replace the classification loss with KLD-like loss (usually used in variational auto-encoders) to add more variance to predictions. But I guess it is not important for a small vocabulary.
+A neat idea from annotated transformer that I did not explore - replace the classification loss with KLD-like loss (usually used in variational auto-encoders) to add more variance to predictions. But I guess it is not important for a small vocabulary.
 
 ## **Kind words about organization and comparison to Kaggle**
 
 If you do Kaggle / monitor the ML scene, then you may be aware that Kaggle is all of these things:
 - Essentially now it is a joke for serious people;
 - Plagued by bozo explosion;
-- Each recent major competition features a severe idiotic leak and or organization flaw - obviously no one cares there anymore;
-- In 2018 it essentially is great for getting **free experience / free datasets / free code** - but all the medals and achievements are largely overrated (kernels are mostly farmed by attention whores, but sometimes there are super stellar pipelines there);
+- Each recent major competition features a severe idiotic leak and/or organization flaw - obviously no one cares there anymore;
+- In 2018 it is essentially great to get **free experience / free datasets / free code** - but all the medals and achievements are largely overrated (kernels are mostly farmed by guys who wants to get a lot of attention, but sometimes there are super stellar pipelines);
 
 **Do not believe me - just read these posts** [1](https://www.kaggle.com/c/airbus-ship-detection/discussion/64355) [2](https://www.kaggle.com/c/airbus-ship-detection/discussion/64366) [3](https://www.kaggle.com/c/airbus-ship-detection/discussion/64393);
 
-Anyway to the point - the organization of this competitions was NOTHING like Kaggle:
+Anyway to the point - the organization of this competition was NOTHING like Kaggle:
 - No leaks and / or opportunities for idiotic LB probing;
 - Good correlation of local validation / private / public LB;
-- Only a few minor erros by hosts (occasinal glitches with platform, no team formation deadline, too late deadline for exernal data, not compute limitations and no dockerization / re-running requirements);
+- Only a few minor erros by hosts (occasional glitches with the platform, no team formation deadline, too late deadline for exernal data, no compute limitations and no dockerization / re-running requirements);
 - Interesting and challenging domain;
 
 ## **Competition pulse**
 
-At first Savva dominated the leaderboard (**LB**) with his 88% score for a long time.
-This is the moment when competition caught up. My pipelines mostly were failures at this moment.
+At first Sava dominated the leaderboard (**LB**) with his 88% score for a long time.
+This is the moment when competition caught up. My pipelines mostly were failures at that moment.
 
 ![](https://pics.spark-in.me/upload/3193fa61d2f05a14bbc048c504e6964b.jpg)
 
-Then I finally manage to make the annotated encoder decoder work and we were trolling the LB again for some time (probably a week or so).
+Then I finally managed to make the annotated encoder decoder work and we were trolling the LB again for some time (probably a week or so).
 
 ![](https://pics.spark-in.me/upload/75d5f0f8644fb932a423602955b3d8ed.jpg)
 
-We did not really bother to stack our model and / or show our best results, but at this point it was worrying, because our single best model + heuristics did not really have a lot of breathing room. At this point we could achieve ~`92%`, but we waited and tried different models and heuristics.
+We did not really bother to stack our model and / or show our best results, but at this point it was worrying, because our single best model + heuristics did not really have a lot of breathing room. At this point we could achieve ~`92%`, but we were waiting and trying different models and heuristics.
 
 ![](https://pics.spark-in.me/upload/aeb7ee6daecd667de8c6170bad6cfd0e.jpg)
 
-This was pre-final result sometime during the last day. Notice `thousandvoices` is at the top. We had to ensemble our models quite a bit here. Also I found a bug in my augmentation pipeline 1 day before the competition end, and our single best model started learning quite quickly and achieved ~`92.5%` w/o heuristics and ~`93%` with a plain heuristic.
+This was pre-final results sometime during the last day. Notice `thousandvoices` was at the top. We had to ensemble our models quite a bit here. Also I found a bug in my augmentation pipeline 1 day before the competition end, and our single best model started learning quite quickly and achieved ~`92.5%` w/o heuristics and ~`93%` with a plain heuristic.
 
 But this did not transfer well to our ensemble. 1% gain in the best model translated into `0.2-0.3%` for reasons explained above.
 
 ![](https://pics.spark-in.me/upload/d629b2eae0b0886b3217f02b13d68ebd.jpg)
 
-It was quite a heated battle during the last minutes (I wonder why people do not sleep at 11:59 PM on Sunday???)
+It was quite a hot battle during the last minutes (I wonder why people do not sleep at 11:59 PM on Sunday???)
 
 ![](https://pics.spark-in.me/upload/92f69dbdbc696dbc9d74b719dd7a4f42.jpg)
 
 And this is the final private leaderboard. Notice that we kept our ground and `thousandvoices` likely:
 - Either somehow over-fitted (or maybe he used some leaks, who knows);
-- Or just forgot to choose his final submission, who knows;
+- Or just forgot to choose his best final submissions, who knows;
 
-But it is victors, who write history.
+But history is written by the victors.
 
 ![](https://pics.spark-in.me/upload/f90665508581c16155d3cffb65a6fb95.jpg)
 
